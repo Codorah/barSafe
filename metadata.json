@@ -1,0 +1,8 @@
+
+{
+  "name": "BarSafe Togo - Gestion & Transparence",
+  "description": "Une solution complète de gestion de bar pour le Togo : menu client par QR code, suivi des serveurs, inventaire sécurisé et rapports financiers pour le patron.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
