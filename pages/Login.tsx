@@ -1,6 +1,7 @@
-
 import React, { useState } from 'react';
 import { UserRole, Establishment } from '../types';
+import { api } from '../api';
+import MapEmbed from '../components/MapEmbed';
 
 interface LoginProps {
   bar?: Establishment;
@@ -8,140 +9,132 @@ interface LoginProps {
   onClientAccess: () => void;
 }
 
+const STAFF_ROLES: { role: UserRole; label: string; desc: string; icon: string }[] = [
+  { role: UserRole.PATRON, label: 'Direction', desc: 'Stats, stock, équipe — tout gérer', icon: 'fa-crown' },
+  { role: UserRole.SERVEUR, label: 'Service', desc: 'Prise de commande & tables', icon: 'fa-bell-concierge' },
+  { role: UserRole.CAISSIER, label: 'Caisse', desc: 'Encaissement des paiements', icon: 'fa-cash-register' },
+];
+
 const Login: React.FC<LoginProps> = ({ bar, onLogin, onClientAccess }) => {
-  const [isStaff, setIsStaff] = useState(false);
-  const [role, setRole] = useState<UserRole>(UserRole.SERVEUR);
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
+  const [view, setView] = useState<'CHOOSE' | 'STAFF'>('CHOOSE');
+  const [role, setRole] = useState<UserRole>(UserRole.PATRON);
   const [code, setCode] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  if (!bar) return <div>Bar introuvable</div>;
+  if (!bar) {
+    return (
+      <div className="min-h-[70vh] grid place-items-center">
+        <div className="card p-10 text-center max-w-sm">
+          <p className="font-display text-xl text-ink mb-1">Établissement introuvable</p>
+          <p className="text-sm text-muted">Revenez à l'accueil pour choisir un lieu.</p>
+        </div>
+      </div>
+    );
+  }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const roleInfo = STAFF_ROLES.find(r => r.role === role)!;
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!firstName || !lastName || !code) return alert('Veuillez remplir tous les champs.');
-    
-    if (code !== bar.secretCode) {
-      return alert('Code secret incorrect pour cet établissement.');
-    }
-
-    onLogin({ 
-      name: `${firstName} ${lastName}`, 
-      role, 
-      establishmentId: bar.id 
-    });
+    setError(null);
+    if (!code.trim()) return setError('Entrez le code d\'accès.');
+    setIsLoading(true);
+    const ok = await api.verifyAccess(bar.id, role, code.trim());
+    setIsLoading(false);
+    if (!ok) return setError('Code incorrect pour cet espace.');
+    onLogin({ name: roleInfo.label, role, establishmentId: bar.id });
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-12">
-      <div className="text-center space-y-4">
-        <div className="relative inline-block">
-          <img src={bar.logoUrl} className="w-32 h-32 rounded-[2.5rem] mx-auto border-8 border-white shadow-2xl object-cover relative z-10" />
-          <div className="absolute inset-0 bg-yellow-500 blur-2xl opacity-20 scale-150"></div>
-        </div>
-        <div>
-          <h1 className="text-4xl font-black text-gray-900 tracking-tight">{bar.name}</h1>
-          <p className="text-gray-500 font-medium">Content de vous revoir chez nous !</p>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-        {/* Client Access */}
-        <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-xl hover:shadow-2xl transition-all flex flex-col items-center text-center group">
-          <div className="w-20 h-20 bg-yellow-100 text-yellow-600 rounded-3xl flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform duration-500 rotate-12">
-            <i className="fa-solid fa-utensils"></i>
-          </div>
-          <h2 className="text-2xl font-black mb-4">Espace Client</h2>
-          <p className="text-gray-500 font-medium text-sm mb-8 leading-relaxed">
-            Consultez notre menu digital, découvrez nos promotions et commandez sans attendre.
-          </p>
-          <button 
-            onClick={onClientAccess}
-            className="mt-auto w-full bg-yellow-500 text-gray-900 font-black py-4 rounded-2xl hover:bg-yellow-400 transition-all shadow-lg hover:shadow-yellow-500/20"
-          >
-            CONSULTER LE MENU
-          </button>
+    <div className="min-h-[74vh] flex flex-col items-center justify-center py-6">
+      <div className="w-full max-w-md animate-rise-in">
+        <div className="text-center mb-8">
+          <img
+            src={bar.logoUrl && bar.logoUrl.startsWith('http') ? bar.logoUrl : '/logo.png'}
+            alt={`Logo de ${bar.name}`}
+            className="w-20 h-20 mx-auto object-cover rounded-2xl border border-line/15 shadow-soft mb-4"
+          />
+          <h1 className="font-display text-3xl font-semibold text-ink tracking-tight">{bar.name}</h1>
+          <p className="text-sm text-muted mt-1">Bienvenue — comment souhaitez-vous entrer&nbsp;?</p>
         </div>
 
-        {/* Staff Access */}
-        <div className="bg-[#4A0E1C] p-10 rounded-[3rem] border border-white/10 shadow-xl flex flex-col items-center group relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
-          
-          <div className="w-20 h-20 bg-white/10 text-yellow-500 rounded-3xl flex items-center justify-center text-3xl mb-6 group-hover:scale-110 transition-transform duration-500 -rotate-12 border border-white/10">
-            <i className="fa-solid fa-user-tie"></i>
-          </div>
-          <h2 className="text-2xl font-black mb-4 text-white">Espace Personnel</h2>
-          
-          {isStaff ? (
-            <form onSubmit={handleSubmit} className="w-full space-y-4 mt-4 relative z-10">
-              <div className="grid grid-cols-2 gap-3">
-                <input 
-                  type="text" 
-                  placeholder="Prénom" 
-                  className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:border-yellow-500 text-white font-bold"
-                  value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
-                  required
-                />
-                <input 
-                  type="text" 
-                  placeholder="Nom" 
-                  className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:border-yellow-500 text-white font-bold"
-                  value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
-                  required
-                />
-              </div>
-              <select 
-                value={role}
-                onChange={(e) => setRole(e.target.value as UserRole)}
-                className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:border-yellow-500 text-white font-bold appearance-none cursor-pointer"
-              >
-                <option value={UserRole.SERVEUR}>Serveur / Caissier</option>
-                <option value={UserRole.PATRON}>Administrateur / Patron</option>
-              </select>
-              <input 
-                type="password" 
-                placeholder="Code secret de l'établissement" 
-                className="w-full px-6 py-4 bg-white/5 border border-white/10 rounded-2xl outline-none focus:border-yellow-500 text-white font-black text-center tracking-[0.3em]"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                required
-              />
-              <div className="flex gap-3 pt-4">
-                <button 
-                  type="button"
-                  onClick={() => setIsStaff(false)}
-                  className="flex-1 bg-white/10 text-white font-bold py-4 rounded-2xl hover:bg-white/20 transition-all"
-                >
-                  <i className="fa-solid fa-arrow-left"></i>
-                </button>
-                <button 
-                  type="submit"
-                  className="flex-[3] bg-yellow-500 text-[#4A0E1C] font-black py-4 rounded-2xl hover:bg-yellow-400 transition-all shadow-xl"
-                >
-                  CONNEXION
-                </button>
-              </div>
-            </form>
-          ) : (
-            <div className="flex flex-col items-center w-full relative z-10">
-              <p className="text-white/60 font-medium text-sm mb-8 text-center leading-relaxed">
-                Connectez-vous pour gérer les commandes en cours, valider les encaissements ou surveiller l'inventaire.
-              </p>
-              <button 
-                onClick={() => setIsStaff(true)}
-                className="mt-auto w-full bg-white text-[#4A0E1C] font-black py-4 rounded-2xl hover:bg-gray-100 transition-all shadow-lg"
-              >
-                ACCÈS STAFF
-              </button>
+        <div className="panel p-6 sm:p-8">
+          {error && (
+            <div className="mb-5 flex items-start gap-3 rounded-2xl bg-danger/12 text-danger px-4 py-3 text-sm font-medium animate-pop-in" role="alert">
+              <i className="fa-solid fa-circle-exclamation mt-0.5" aria-hidden="true"></i>
+              <span>{error}</span>
             </div>
           )}
+
+          {view === 'CHOOSE' ? (
+            <div className="space-y-3">
+              <button onClick={onClientAccess} className="w-full group rounded-2xl border border-line/12 bg-surface2 hover:border-accent/50 p-4 flex items-center gap-4 text-left transition-all">
+                <span className="w-12 h-12 rounded-xl bg-accent/14 text-accentStrong grid place-items-center text-lg shrink-0"><i className="fa-solid fa-utensils" aria-hidden="true"></i></span>
+                <span className="flex-grow">
+                  <span className="block font-semibold text-ink">Je suis client</span>
+                  <span className="block text-xs text-muted mt-0.5">Consulter le menu et commander</span>
+                </span>
+                <i className="fa-solid fa-arrow-right text-faint group-hover:text-accentStrong transition-colors" aria-hidden="true"></i>
+              </button>
+
+              <button onClick={() => { setView('STAFF'); setError(null); }} className="w-full group rounded-2xl border border-line/12 bg-surface2 hover:border-accent/50 p-4 flex items-center gap-4 text-left transition-all">
+                <span className="w-12 h-12 rounded-xl bg-ink/8 text-ink grid place-items-center text-lg shrink-0"><i className="fa-solid fa-user-lock" aria-hidden="true"></i></span>
+                <span className="flex-grow">
+                  <span className="block font-semibold text-ink">Accès équipe</span>
+                  <span className="block text-xs text-muted mt-0.5">Direction, service &amp; caisse</span>
+                </span>
+                <i className="fa-solid fa-arrow-right text-faint group-hover:text-accentStrong transition-colors" aria-hidden="true"></i>
+              </button>
+
+              {bar.lat != null && bar.lng != null && (
+                <MapEmbed lat={bar.lat} lng={bar.lng} name={bar.name} address={bar.address} className="mt-2" />
+              )}
+            </div>
+          ) : (
+            <form onSubmit={submit} className="space-y-5">
+              <div className="flex items-center gap-3">
+                <button type="button" onClick={() => { setView('CHOOSE'); setCode(''); setError(null); }} className="icon-btn !w-9 !h-9" aria-label="Retour">
+                  <i className="fa-solid fa-arrow-left text-sm" aria-hidden="true"></i>
+                </button>
+                <h2 className="font-display text-lg font-semibold text-ink">Quel est votre espace&nbsp;?</h2>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                {STAFF_ROLES.map(r => (
+                  <button
+                    key={r.role}
+                    type="button"
+                    onClick={() => { setRole(r.role); setError(null); }}
+                    className={`rounded-2xl border p-3 flex flex-col items-center gap-1.5 text-center transition-all ${role === r.role ? 'border-accent bg-accent/10' : 'border-line/12 hover:border-line/25'}`}
+                  >
+                    <i className={`fa-solid ${r.icon} text-lg ${role === r.role ? 'text-accentStrong' : 'text-muted'}`} aria-hidden="true"></i>
+                    <span className={`text-xs font-semibold ${role === r.role ? 'text-ink' : 'text-muted'}`}>{r.label}</span>
+                  </button>
+                ))}
+              </div>
+
+              <p className="text-xs text-muted text-center -mt-1">{roleInfo.desc}</p>
+
+              <div>
+                <label className="label text-center" htmlFor="access-code">Code d'accès {roleInfo.label}</label>
+                <input
+                  id="access-code"
+                  inputMode="numeric"
+                  autoFocus
+                  value={code}
+                  onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 8))}
+                  placeholder="••••"
+                  className="field field-lg text-center tracking-[0.5em] text-2xl font-semibold tabnum"
+                />
+              </div>
+
+              <button type="submit" disabled={isLoading} className="btn btn-primary btn-block btn-lg">
+                {isLoading ? <i className="fa-solid fa-circle-notch fa-spin" aria-hidden="true"></i> : <>Entrer <i className="fa-solid fa-arrow-right" aria-hidden="true"></i></>}
+              </button>
+            </form>
+          )}
         </div>
-      </div>
-      
-      <div className="text-center pt-10">
-        <p className="text-gray-400 text-xs font-bold uppercase tracking-[0.3em]">Propulsé par BarSafe Togo</p>
       </div>
     </div>
   );

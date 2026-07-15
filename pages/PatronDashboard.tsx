@@ -1,8 +1,8 @@
-
 import React, { useEffect, useMemo, useState } from 'react';
 import { Product, OrderStatus, Order } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import QRCode from 'react-qr-code';
+import { useTheme } from '../theme';
 
 interface PatronDashboardProps {
   state: {
@@ -10,12 +10,24 @@ interface PatronDashboardProps {
     orders: Order[];
     currentUser: any;
   };
-  onUpdateProducts: (products: Product[]) => void;
+  onAddProduct: (product: Omit<Product, 'id'>) => void;
+  onDeleteProduct: (id: string) => void;
   onAddStock: (productId: string, qty: number) => void;
 }
 
-const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onUpdateProducts, onAddStock }) => {
-  const [activeTab, setActiveTab] = useState<'STATS' | 'STOCK' | 'PRODUCTS' | 'QR_CODE'>('STATS');
+const CATEGORIES = ['Bière', 'Sucrerie', 'Plat', 'Autre'];
+
+type Tab = 'STATS' | 'STOCK' | 'PRODUCTS' | 'QR_CODE';
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'STATS', label: 'Rapports' },
+  { key: 'STOCK', label: 'Inventaire' },
+  { key: 'PRODUCTS', label: 'Produits' },
+  { key: 'QR_CODE', label: 'QR Code' },
+];
+
+const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onAddProduct, onDeleteProduct, onAddStock }) => {
+  const { resolved } = useTheme();
+  const [activeTab, setActiveTab] = useState<Tab>('STATS');
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showAddStockModal, setShowAddStockModal] = useState<string | null>(null);
   const [stockQty, setStockQty] = useState(0);
@@ -23,50 +35,42 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onUpdateProduc
   const [newProductPrice, setNewProductPrice] = useState(0);
   const [newProductImageUrl, setNewProductImageUrl] = useState('');
   const [newProductDescription, setNewProductDescription] = useState('');
+  const [newProductCategory, setNewProductCategory] = useState('Bière');
+  const [newProductThreshold, setNewProductThreshold] = useState(10);
   const [productImageInputKey, setProductImageInputKey] = useState(0);
   const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [isAddingStock, setIsAddingStock] = useState(false);
-  const [cardsAnimated, setCardsAnimated] = useState(false);
   const [toasts, setToasts] = useState<Array<{ id: number; message: string; tone: 'success' | 'info' }>>([]);
   const [productSearch, setProductSearch] = useState('');
   const [productFilter, setProductFilter] = useState<'ALL' | 'LOW_STOCK' | string>('ALL');
   const [displayedSales, setDisplayedSales] = useState(0);
   const [displayedLowStock, setDisplayedLowStock] = useState(0);
 
-  useEffect(() => {
-    setCardsAnimated(false);
-    const timer = window.setTimeout(() => setCardsAnimated(true), 70);
-    return () => window.clearTimeout(timer);
-  }, [activeTab]);
+  const chart = resolved === 'dark'
+    ? { bar: '#E0A33E', grid: 'rgba(244,236,224,0.10)', tick: '#B0A394', tipBg: '#201B16', tipText: '#F4ECE0' }
+    : { bar: '#E0A33E', grid: 'rgba(26,21,18,0.10)', tick: '#6B5D4F', tipBg: '#FFFDF9', tipText: '#1A1512' };
 
   const pushToast = (message: string, tone: 'success' | 'info' = 'success') => {
     const id = Date.now() + Math.floor(Math.random() * 1000);
     setToasts(prev => [...prev, { id, message, tone }]);
-    window.setTimeout(() => {
-      setToasts(prev => prev.filter(toast => toast.id !== id));
-    }, 2200);
+    window.setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 2400);
   };
 
-  const totalSales = state.orders
-    .filter(o => o.status === OrderStatus.PAID)
-    .reduce((acc, o) => acc + o.total, 0);
-  const lowStockCount = state.products.filter(p => p.currentStock < 10).length;
+  const totalSales = state.orders.filter(o => o.status === OrderStatus.PAID).reduce((acc, o) => acc + o.total, 0);
+  const isLow = (p: Product) => p.currentStock < (p.lowStockThreshold ?? 10);
+  const lowStockCount = state.products.filter(isLow).length;
+  const stockValue = state.products.reduce((acc, p) => acc + p.currentStock * p.price, 0);
+  const alertCount = state.products.filter(p => isLow(p) && p.currentStock > 0).length;
+  const outCount = state.products.filter(p => p.currentStock <= 0).length;
+  const suggestReorder = (p: Product) => Math.max((p.lowStockThreshold ?? 10) * 2 - p.currentStock, p.lowStockThreshold ?? 10);
 
-  const categoryFilters = useMemo(
-    () => Array.from(new Set(state.products.map(p => p.category))),
-    [state.products]
-  );
+  const categoryFilters = useMemo(() => Array.from(new Set(state.products.map(p => p.category))), [state.products]);
 
   const filteredProducts = useMemo(() => {
     const term = productSearch.trim().toLowerCase();
     return state.products.filter(p => {
-      const matchesSearch =
-        !term ||
-        p.name.toLowerCase().includes(term) ||
-        p.description.toLowerCase().includes(term);
-      const matchesFilter =
-        productFilter === 'ALL' ||
-        (productFilter === 'LOW_STOCK' ? p.currentStock < 10 : p.category === productFilter);
+      const matchesSearch = !term || p.name.toLowerCase().includes(term) || p.description.toLowerCase().includes(term);
+      const matchesFilter = productFilter === 'ALL' || (productFilter === 'LOW_STOCK' ? p.currentStock < (p.lowStockThreshold ?? 10) : p.category === productFilter);
       return matchesSearch && matchesFilter;
     });
   }, [state.products, productSearch, productFilter]);
@@ -78,8 +82,7 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onUpdateProduc
     const startTime = performance.now();
     const tick = (now: number) => {
       const progress = Math.min((now - startTime) / duration, 1);
-      const next = Math.round(startValue + (totalSales - startValue) * progress);
-      setDisplayedSales(next);
+      setDisplayedSales(Math.round(startValue + (totalSales - startValue) * progress));
       if (progress < 1) raf = window.requestAnimationFrame(tick);
     };
     raf = window.requestAnimationFrame(tick);
@@ -93,8 +96,7 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onUpdateProduc
     const startTime = performance.now();
     const tick = (now: number) => {
       const progress = Math.min((now - startTime) / duration, 1);
-      const next = Math.round(startValue + (lowStockCount - startValue) * progress);
-      setDisplayedLowStock(next);
+      setDisplayedLowStock(Math.round(startValue + (lowStockCount - startValue) * progress));
       if (progress < 1) raf = window.requestAnimationFrame(tick);
     };
     raf = window.requestAnimationFrame(tick);
@@ -103,251 +105,339 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onUpdateProduc
 
   const topProducts = state.products
     .map(p => {
-      const sold = state.orders
-        .filter(o => o.status === OrderStatus.PAID)
-        .reduce((acc, o) => {
-          const item = o.items.find(i => i.productId === p.id);
-          return acc + (item?.quantity || 0);
-        }, 0);
+      const sold = state.orders.filter(o => o.status === OrderStatus.PAID).reduce((acc, o) => acc + (o.items.find(i => i.productId === p.id)?.quantity || 0), 0);
       return { name: p.name, sold };
     })
     .sort((a, b) => b.sold - a.sold)
     .slice(0, 5);
 
+  const qrValue = `${window.location.origin}/b/${state.currentUser?.establishmentId}`;
+
+  const paidOrders = state.orders.filter(o => o.status === OrderStatus.PAID);
+  const paidCount = paidOrders.length;
+  const avgTicket = paidCount ? Math.round(totalSales / paidCount) : 0;
+
+  const salesByDay = useMemo(() => {
+    const out: { label: string; total: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - i);
+      const start = d.getTime(); const end = start + 86400000;
+      const total = state.orders
+        .filter(o => o.status === OrderStatus.PAID && o.timestamp >= start && o.timestamp < end)
+        .reduce((a, o) => a + o.total, 0);
+      out.push({ label: d.toLocaleDateString('fr-FR', { weekday: 'short' }), total });
+    }
+    return out;
+  }, [state.orders]);
+
+  const paymentBreakdown = [
+    { method: 'Espèces', key: 'ESPECES', icon: 'fa-money-bill-wave' },
+    { method: 'Carte', key: 'CARTE', icon: 'fa-credit-card' },
+    { method: 'Mobile Money', key: 'MOBILE_MONEY', icon: 'fa-mobile-screen-button' },
+  ].map(m => ({ ...m, total: paidOrders.filter(o => o.paymentMethod === m.key).reduce((a, o) => a + o.total, 0) }));
+  const paymentMax = Math.max(1, ...paymentBreakdown.map(p => p.total));
+
+  const exportCSV = () => {
+    const header = ['Date', 'Heure', 'Table', 'Client', 'Statut', 'Paiement', 'Total'];
+    const rows = state.orders.map(o => [
+      new Date(o.timestamp).toLocaleDateString('fr-FR'),
+      new Date(o.timestamp).toLocaleTimeString('fr-FR'),
+      o.tableNumber, o.clientName || '', o.status, o.paymentMethod || '', o.total,
+    ]);
+    const csv = [header, ...rows].map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `barsafe-commandes-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    pushToast('Export CSV téléchargé');
+  };
+
   return (
-    <div className="space-y-8 pb-20 animate-fade-in">
-      <header className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+    <div className="space-y-8 pb-16 animate-fade-in">
+      {/* Header + tabs */}
+      <header className="space-y-5">
         <div>
-          <h1 className="text-3xl font-black">Espace Patron 👑</h1>
-          <p className="text-gray-500">Contrôle total de votre établissement</p>
+          <h1 className="font-display text-3xl sm:text-4xl font-semibold text-ink tracking-tight">Tableau de bord</h1>
+          <p className="text-sm text-muted mt-1">Pilotez votre établissement d'un coup d'œil</p>
         </div>
-        <div className="flex bg-white p-1 rounded-2xl shadow-sm border gap-1">
-          {['STATS', 'STOCK', 'PRODUCTS', 'QR_CODE'].map(tab => (
-            <button 
-              key={tab}
-              onClick={() => setActiveTab(tab as any)}
-              className={`px-6 py-2 rounded-xl text-xs font-black transition-all ${
-                activeTab === tab ? 'bg-gray-900 text-white' : 'text-gray-400 hover:text-gray-600'
-              }`}
-            >
-              {tab === 'STATS' ? 'Rapports' : tab === 'STOCK' ? 'Inventaire' : tab === 'PRODUCTS' ? 'Produits' : 'QR Code'}
-            </button>
-          ))}
+        <div className="overflow-x-auto scroll-slim -mx-1 px-1">
+          <div className="segmented w-max">
+            {TABS.map(t => (
+              <button key={t.key} onClick={() => setActiveTab(t.key)} className={`seg-item ${activeTab === t.key ? 'seg-item-active' : ''}`}>
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
 
+      {/* STATS */}
       {activeTab === 'STATS' && (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className={`bg-white p-6 rounded-3xl border shadow-sm ${cardsAnimated ? 'animate-rise-in' : ''}`}>
-              <p className="text-xs font-bold text-gray-400 uppercase mb-1">Chiffre d'Affaires</p>
-              <h4 className="text-2xl font-black text-green-600">{displayedSales.toLocaleString()} <span className="text-sm">FCFA</span></h4>
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="font-display text-lg font-semibold text-ink">Aperçu</h3>
+            <button onClick={exportCSV} className="btn btn-outline btn-sm"><i className="fa-solid fa-file-csv" aria-hidden="true"></i> Export CSV</button>
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="card p-6">
+              <p className="eyebrow mb-2">Chiffre d'affaires</p>
+              <p className="font-display text-2xl sm:text-3xl font-semibold text-positive tabnum">{displayedSales.toLocaleString()}<span className="text-sm text-muted font-sans font-medium ml-1">F</span></p>
             </div>
-            <div className={`bg-white p-6 rounded-3xl border shadow-sm ${cardsAnimated ? 'animate-rise-in delay-1' : ''}`}>
-              <p className="text-xs font-bold text-gray-400 uppercase mb-1">Stock Alerte</p>
-              <h4 className="text-2xl font-black text-red-600">
-                {displayedLowStock} <span className="text-sm">Produits</span>
-              </h4>
+            <div className="card p-6">
+              <p className="eyebrow mb-2">Panier moyen</p>
+              <p className="font-display text-2xl sm:text-3xl font-semibold text-ink tabnum">{avgTicket.toLocaleString()}<span className="text-sm text-muted font-sans font-medium ml-1">F</span></p>
+            </div>
+            <div className="card p-6">
+              <p className="eyebrow mb-2">Commandes payées</p>
+              <p className="font-display text-2xl sm:text-3xl font-semibold text-ink tabnum">{paidCount}</p>
+            </div>
+            <button onClick={() => setActiveTab('STOCK')} className="card card-hover p-6 text-left">
+              <p className="eyebrow mb-2">Stock faible</p>
+              <p className="font-display text-2xl sm:text-3xl font-semibold text-danger tabnum">{displayedLowStock} <span className="text-sm text-muted font-sans font-medium">prod.</span></p>
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="card p-6">
+              <h3 className="font-display text-lg font-semibold text-ink mb-5">Produits les plus vendus</h3>
+              {topProducts.length === 0 ? (
+                <div className="h-64 grid place-items-center text-sm text-muted">Pas encore de ventes.</div>
+              ) : (
+                <div className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={topProducts} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chart.grid} />
+                      <XAxis dataKey="name" tick={{ fill: chart.tick, fontSize: 11 }} tickLine={false} axisLine={false} />
+                      <YAxis tick={{ fill: chart.tick, fontSize: 11 }} tickLine={false} axisLine={false} allowDecimals={false} />
+                      <Tooltip cursor={{ fill: chart.grid }} contentStyle={{ background: chart.tipBg, border: 'none', borderRadius: 14, color: chart.tipText, boxShadow: '0 10px 30px -12px rgba(0,0,0,0.4)' }} labelStyle={{ color: chart.tipText }} />
+                      <Bar dataKey="sold" fill={chart.bar} radius={[8, 8, 0, 0]} maxBarSize={48} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+
+            <div className="card p-6">
+              <h3 className="font-display text-lg font-semibold text-ink mb-5">Inventaire rapide</h3>
+              {state.products.length === 0 ? (
+                <div className="h-64 grid place-items-center text-sm text-muted">Aucun produit enregistré.</div>
+              ) : (
+                <div className="space-y-3 max-h-64 overflow-y-auto scroll-slim pr-1">
+                  {state.products.map(p => {
+                    const sold = state.orders.filter(o => o.status === OrderStatus.PAID).reduce((acc, o) => acc + (o.items.find(i => i.productId === p.id)?.quantity || 0), 0);
+                    return (
+                      <div key={p.id} className="flex justify-between items-center pb-3 border-b border-line/6 last:border-0">
+                        <div>
+                          <p className="font-medium text-ink text-sm">{p.name}</p>
+                          <p className="text-xs text-muted">Vendus : {sold}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className={`font-semibold tabnum ${isLow(p) ? 'text-danger' : 'text-ink'}`}>{p.currentStock} restants</p>
+                          <p className="text-[0.65rem] text-faint uppercase tracking-wide">Initial : {p.initialStock}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            <div className={`bg-white p-6 rounded-3xl border shadow-sm ${cardsAnimated ? 'animate-rise-in delay-2' : ''}`}>
-              <h3 className="font-black text-xl mb-6">Performance des Produits 🏆</h3>
-              <div className="h-64">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="card p-6">
+              <h3 className="font-display text-lg font-semibold text-ink mb-5">Ventes des 7 derniers jours</h3>
+              <div className="h-56">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={topProducts}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="name" hide />
-                    <YAxis />
-                    <Tooltip />
-                    <Bar dataKey="sold" fill="#EAB308" radius={[8, 8, 0, 0]} />
+                  <BarChart data={salesByDay} margin={{ top: 4, right: 4, left: -18, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chart.grid} />
+                    <XAxis dataKey="label" tick={{ fill: chart.tick, fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <YAxis tick={{ fill: chart.tick, fontSize: 11 }} tickLine={false} axisLine={false} />
+                    <Tooltip cursor={{ fill: chart.grid }} contentStyle={{ background: chart.tipBg, border: 'none', borderRadius: 14, color: chart.tipText }} labelStyle={{ color: chart.tipText }} formatter={(v: any) => [`${Number(v).toLocaleString()} F`, 'Ventes']} />
+                    <Bar dataKey="total" fill={chart.bar} radius={[8, 8, 0, 0]} maxBarSize={40} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             </div>
-            
-            <div className={`bg-white p-6 rounded-3xl border shadow-sm ${cardsAnimated ? 'animate-rise-in delay-3' : ''}`}>
-               <h3 className="font-black text-xl mb-6">Inventaire Rapide</h3>
-               <div className="space-y-4">
-                 {state.products.map(p => {
-                    const sold = state.orders.filter(o => o.status === OrderStatus.PAID).reduce((acc, o) => acc + (o.items.find(i => i.productId === p.id)?.quantity || 0), 0);
-                    return (
-                      <div key={p.id} className="flex justify-between items-center pb-2 border-b">
-                        <div>
-                          <p className="font-bold">{p.name}</p>
-                          <p className="text-xs text-gray-400">Sold: {sold} units</p>
-                        </div>
-                        <div className="text-right">
-                          <p className={`font-black ${p.currentStock < 10 ? 'text-red-500' : 'text-gray-900'}`}>{p.currentStock} restants</p>
-                          <p className="text-[10px] text-gray-400 uppercase">Initial: {p.initialStock}</p>
-                        </div>
-                      </div>
-                    )
-                 })}
-               </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {activeTab === 'STOCK' && (
-        <div className="bg-white rounded-3xl border overflow-hidden">
-          <div className="p-6 border-b flex justify-between items-center">
-            <h3 className="text-xl font-black">Gestion de l'Inventaire 📦</h3>
-          </div>
-          <table className="w-full text-left">
-            <thead className="bg-gray-50 border-b">
-              <tr>
-                <th className="px-6 py-4 font-bold text-gray-400 text-xs uppercase">Produit</th>
-                <th className="px-6 py-4 font-bold text-gray-400 text-xs uppercase">Initial</th>
-                <th className="px-6 py-4 font-bold text-gray-400 text-xs uppercase">Actuel</th>
-                <th className="px-6 py-4 font-bold text-gray-400 text-xs uppercase text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y">
-              {state.products.map(p => (
-                <tr key={p.id}>
-                  <td className="px-6 py-4 font-bold">{p.name}</td>
-                  <td className="px-6 py-4 text-gray-500">{p.initialStock}</td>
-                  <td className="px-6 py-4">
-                    <span className={`font-black ${p.currentStock < 10 ? 'text-red-500' : 'text-green-600'}`}>{p.currentStock}</span>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <button 
-                      onClick={() => setShowAddStockModal(p.id)}
-                      className="bg-yellow-500 text-gray-900 px-4 py-2 rounded-xl text-xs font-black shadow-sm"
-                    >
-                      AJOUTER STOCK
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {activeTab === 'PRODUCTS' && (
-        <div className="space-y-6">
-          <div className="flex justify-between items-center">
-             <h2 className="text-xl font-black">Vos Produits</h2>
-             <button
-               onClick={() => setShowAddProduct(true)}
-               className="bg-gray-900 text-white px-6 py-3 rounded-2xl font-bold"
-             >
-               Ajouter un produit
-             </button>
-          </div>
-          <div className="bg-white border rounded-3xl p-4 sm:p-5 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between animate-rise-in">
-            <div className="flex-1">
-              <input
-                type="text"
-                value={productSearch}
-                onChange={(e) => setProductSearch(e.target.value)}
-                placeholder="Rechercher un produit..."
-                className="w-full px-4 py-3 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-yellow-500 outline-none"
-              />
-            </div>
-            <div className="sm:w-64">
-              <select
-                value={productFilter}
-                onChange={(e) => setProductFilter(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-yellow-500 outline-none font-medium"
-              >
-                <option value="ALL">Tous les produits</option>
-                <option value="LOW_STOCK">Stock faible</option>
-                {categoryFilters.map(category => (
-                  <option key={category} value={category}>{category}</option>
-                ))}
-              </select>
-            </div>
-            <div className="text-xs font-bold text-gray-500 whitespace-nowrap">
-              {filteredProducts.length} resultat(s)
-            </div>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-             {filteredProducts.map((p, index) => (
-               <div
-                 key={p.id}
-                 className={`bg-white rounded-3xl border shadow-sm p-4 flex flex-col gap-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl ${cardsAnimated ? 'animate-rise-in' : ''}`}
-                 style={{ animationDelay: `${(index + 1) * 70}ms` }}
-               >
-                  <img src={p.imageUrl} className="w-full h-40 object-cover rounded-2xl" />
-                  <div>
-                    <h4 className="font-black text-lg">{p.name}</h4>
-                    <p className="text-sm text-gray-400 line-clamp-2">{p.description}</p>
-                    <div className="flex items-center justify-between mt-2">
-                      <p className="text-xl font-black text-yellow-600">{p.price} F</p>
-                      <span className="text-[10px] uppercase tracking-wide px-3 py-1 rounded-full bg-yellow-50 text-yellow-700 font-bold">
-                        {p.currentStock < 10 ? 'Stock faible' : 'Disponible'}
-                      </span>
+            <div className="card p-6">
+              <h3 className="font-display text-lg font-semibold text-ink mb-5">Encaissements par moyen</h3>
+              <div className="space-y-4">
+                {paymentBreakdown.map(m => (
+                  <div key={m.key}>
+                    <div className="flex justify-between text-sm mb-1.5">
+                      <span className="text-ink font-medium flex items-center gap-2"><i className={`fa-solid ${m.icon} text-accentStrong`} aria-hidden="true"></i> {m.method}</span>
+                      <span className="text-muted tabnum">{m.total.toLocaleString()} F</span>
+                    </div>
+                    <div className="h-2 rounded-full bg-surface2 overflow-hidden">
+                      <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${(m.total / paymentMax) * 100}%` }} />
                     </div>
                   </div>
-                  <div className="flex gap-2 mt-auto pt-4 border-t">
-                    <button className="flex-grow bg-gray-50 text-gray-500 font-bold py-2 rounded-xl transition-all hover:bg-gray-100">Modifier</button>
-                    <button className="p-2 bg-red-50 text-red-500 rounded-xl transition-all hover:bg-red-100"><i className="fa-solid fa-trash"></i></button>
-                  </div>
-               </div>
-             ))}
-             {filteredProducts.length === 0 && (
-               <div className="col-span-full bg-white border rounded-3xl p-8 text-center text-gray-500 font-medium">
-                 Aucun produit ne correspond a ce filtre.
-               </div>
-             )}
+                ))}
+                {totalSales === 0 && <p className="text-sm text-muted">Pas encore d'encaissement.</p>}
+              </div>
+            </div>
           </div>
         </div>
       )}
 
-      {activeTab === 'QR_CODE' && (
-        <div className="bg-white rounded-3xl border shadow-sm p-12 flex flex-col items-center justify-center animate-rise-in text-center">
-          <h2 className="text-3xl font-black mb-4">Code QR de l'établissement</h2>
-          <p className="text-gray-500 mb-8 max-w-md">Vos clients peuvent scanner ce code pour accéder directement à la carte et passer commande depuis leur table.</p>
-          <div className="bg-white p-6 rounded-3xl shadow-xl border-4 border-gray-100">
-            <QRCode value={`${window.location.origin}/b/${state.currentUser?.establishmentId}`} size={256} />
+      {/* STOCK */}
+      {activeTab === 'STOCK' && (
+        <div className="space-y-6 animate-fade-in">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="card p-6">
+              <p className="eyebrow mb-2">Valeur du stock</p>
+              <p className="font-display text-2xl sm:text-3xl font-semibold text-ink tabnum">{stockValue.toLocaleString()}<span className="text-sm text-muted font-sans font-medium ml-1">FCFA</span></p>
+            </div>
+            <div className="card p-6">
+              <p className="eyebrow mb-2">En alerte</p>
+              <p className="font-display text-2xl sm:text-3xl font-semibold text-warn tabnum">{alertCount} <span className="text-sm text-muted font-sans font-medium">produits</span></p>
+            </div>
+            <div className="card p-6">
+              <p className="eyebrow mb-2">Ruptures</p>
+              <p className="font-display text-2xl sm:text-3xl font-semibold text-danger tabnum">{outCount} <span className="text-sm text-muted font-sans font-medium">produits</span></p>
+            </div>
           </div>
-          <p className="mt-8 text-sm font-bold text-gray-400 bg-gray-50 px-4 py-2 rounded-full">
-            Lien: {`${window.location.origin}/b/${state.currentUser?.establishmentId}`}
-          </p>
+
+          <div className="card overflow-hidden">
+            <div className="p-6 border-b border-line/8">
+              <h3 className="font-display text-xl font-semibold text-ink">Gestion de l'inventaire</h3>
+            </div>
+            {state.products.length === 0 ? (
+              <div className="p-10 text-center text-muted text-sm">Aucun produit. Ajoutez-en dans l'onglet Produits.</div>
+            ) : (
+              <div className="overflow-x-auto scroll-slim">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="border-b border-line/8">
+                      <th className="px-6 py-4 eyebrow font-semibold">Produit</th>
+                      <th className="px-6 py-4 eyebrow font-semibold">Actuel</th>
+                      <th className="px-6 py-4 eyebrow font-semibold">Seuil</th>
+                      <th className="px-6 py-4 eyebrow font-semibold text-right">Valeur</th>
+                      <th className="px-6 py-4 eyebrow font-semibold">État</th>
+                      <th className="px-6 py-4 eyebrow font-semibold text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {state.products.map(p => {
+                      const out = p.currentStock <= 0;
+                      const low = isLow(p);
+                      return (
+                        <tr key={p.id} className="border-b border-line/6 last:border-0">
+                          <td className="px-6 py-4 font-medium text-ink">{p.name}</td>
+                          <td className="px-6 py-4"><span className={`font-semibold tabnum ${low ? 'text-danger' : 'text-positive'}`}>{p.currentStock}</span></td>
+                          <td className="px-6 py-4 text-muted tabnum">{p.lowStockThreshold ?? 10}</td>
+                          <td className="px-6 py-4 text-right text-ink tabnum">{(p.currentStock * p.price).toLocaleString()} F</td>
+                          <td className="px-6 py-4">
+                            {out ? <span className="badge badge-danger">Rupture</span> : low ? <span className="badge badge-warn">Alerte</span> : <span className="badge badge-positive">OK</span>}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            <button onClick={() => { setStockQty(suggestReorder(p)); setShowAddStockModal(p.id); }} className="btn btn-soft btn-sm"><i className="fa-solid fa-plus" aria-hidden="true"></i> Réassort</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* PRODUCTS */}
+      {activeTab === 'PRODUCTS' && (
+        <div className="space-y-5 animate-fade-in">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 className="font-display text-xl font-semibold text-ink">Vos produits</h2>
+            <button onClick={() => setShowAddProduct(true)} className="btn btn-primary"><i className="fa-solid fa-plus" aria-hidden="true"></i> Ajouter un produit</button>
+          </div>
+
+          <div className="card p-4 flex flex-col lg:flex-row gap-3 lg:items-center">
+            <div className="relative flex-1">
+              <i className="fa-solid fa-magnifying-glass absolute left-4 top-1/2 -translate-y-1/2 text-faint" aria-hidden="true"></i>
+              <input type="text" value={productSearch} onChange={(e) => setProductSearch(e.target.value)} placeholder="Rechercher un produit…" className="field field-icon" />
+            </div>
+            <div className="flex gap-2 overflow-x-auto scroll-slim">
+              <button onClick={() => setProductFilter('ALL')} className={`chip ${productFilter === 'ALL' ? 'chip-active' : ''}`}>Tous</button>
+              <button onClick={() => setProductFilter('LOW_STOCK')} className={`chip ${productFilter === 'LOW_STOCK' ? 'chip-active' : ''}`}>Stock faible</button>
+              {categoryFilters.map(c => (
+                <button key={c} onClick={() => setProductFilter(c)} className={`chip ${productFilter === c ? 'chip-active' : ''}`}>{c}</button>
+              ))}
+            </div>
+          </div>
+
+          {filteredProducts.length === 0 ? (
+            <div className="card-flat p-10 text-center text-muted text-sm">Aucun produit ne correspond à ce filtre.</div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredProducts.map(p => (
+                <div key={p.id} className="card overflow-hidden flex flex-col">
+                  <img src={p.imageUrl} alt={p.name} className="w-full h-40 object-cover" />
+                  <div className="p-4 flex flex-col flex-grow">
+                    <h4 className="font-semibold text-ink">{p.name}</h4>
+                    <p className="text-xs text-muted line-clamp-2 mt-1 flex-grow">{p.description}</p>
+                    <div className="flex items-center justify-between mt-3">
+                      <p className="font-display text-lg font-semibold text-accentStrong tabnum">{p.price.toLocaleString()} <span className="text-xs text-muted font-sans font-medium">F</span></p>
+                      <span className={`badge ${isLow(p) ? 'badge-danger' : 'badge-positive'}`}>{isLow(p) ? 'Stock faible' : 'Disponible'}</span>
+                    </div>
+                    <div className="flex gap-2 mt-4 pt-4 border-t border-line/8">
+                      <button className="btn btn-danger btn-sm flex-grow" onClick={() => { onDeleteProduct(p.id); pushToast('Produit supprimé', 'info'); }}>
+                        <i className="fa-solid fa-trash" aria-hidden="true"></i> Supprimer
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* QR CODE */}
+      {activeTab === 'QR_CODE' && (
+        <div className="panel p-10 sm:p-12 flex flex-col items-center max-w-md mx-auto text-center animate-rise-in">
+          <div className="bg-white p-5 rounded-3xl shadow-soft mb-6">
+            <QRCode value={qrValue} size={220} />
+          </div>
+          <h3 className="font-display text-2xl font-semibold text-ink">QR Code de commande</h3>
+          <p className="text-muted text-sm mt-2">Imprimez ce code et posez-le sur chaque table.</p>
+          <p className="mt-6 text-xs font-medium text-muted bg-surface2 border border-line/8 px-5 py-3 rounded-2xl break-all">{qrValue}</p>
         </div>
       )}
 
       {/* Add Stock Modal */}
       {showAddStockModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-3xl w-full max-w-sm shadow-2xl animate-pop-in">
-            <h3 className="text-2xl font-black mb-4">Nouvel arrivage</h3>
-            <p className="text-gray-500 mb-6">Combien de bouteilles/unités avez-vous reçu ?</p>
-            <input 
-              type="number" 
-              className="w-full px-6 py-4 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-yellow-500 outline-none mb-6 text-2xl font-black text-center"
-              placeholder="Ex: 24"
-              value={stockQty}
+        <div className="overlay items-center justify-center" onClick={() => setShowAddStockModal(null)}>
+          <div className="sheet w-full max-w-sm rounded-[2rem] p-7 animate-pop-in" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-2xl font-semibold text-ink mb-1">Nouvel arrivage</h3>
+            <p className="text-sm text-muted mb-5">Combien d'unités avez-vous reçu&nbsp;?</p>
+            <input
+              type="number"
+              className="field field-lg text-center text-2xl font-semibold tabnum mb-5"
+              placeholder="Ex : 24"
+              value={stockQty || ''}
               onChange={(e) => setStockQty(Number(e.target.value))}
             />
             <div className="flex gap-3">
-              <button 
-                onClick={() => setShowAddStockModal(null)}
-                className="flex-1 bg-gray-100 text-gray-600 font-bold py-4 rounded-2xl"
-              >
-                Annuler
-              </button>
-              <button 
+              <button onClick={() => { setShowAddStockModal(null); setStockQty(0); }} className="btn btn-ghost flex-1">Annuler</button>
+              <button
                 onClick={() => {
                   if (stockQty <= 0 || isAddingStock) return;
                   setIsAddingStock(true);
                   window.setTimeout(() => {
-                  onAddStock(showAddStockModal, stockQty);
-                  setShowAddStockModal(null);
-                  setStockQty(0);
-                  setIsAddingStock(false);
-                  pushToast('Stock mis a jour');
+                    onAddStock(showAddStockModal, stockQty);
+                    setShowAddStockModal(null);
+                    setStockQty(0);
+                    setIsAddingStock(false);
+                    pushToast('Stock mis à jour');
                   }, 450);
                 }}
-                className="flex-2 bg-yellow-500 text-gray-900 font-black py-4 rounded-2xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-primary flex-1"
                 disabled={stockQty <= 0 || isAddingStock}
               >
-                {isAddingStock ? 'MISE A JOUR...' : 'CONFIRMER'}
+                {isAddingStock ? 'Mise à jour…' : 'Confirmer'}
               </button>
             </div>
           </div>
@@ -356,74 +446,52 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onUpdateProduc
 
       {/* Add Product Modal */}
       {showAddProduct && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="bg-white p-8 rounded-3xl w-full max-w-lg shadow-2xl animate-pop-in">
-            <h3 className="text-2xl font-black mb-2">Ajouter un produit</h3>
-            <p className="text-gray-500 mb-6">Ajoutez la photo, le prix, le nom et une description (optionnelle).</p>
+        <div className="overlay items-start sm:items-center justify-center overflow-y-auto scroll-slim" onClick={() => setShowAddProduct(false)}>
+          <div className="sheet w-full max-w-lg rounded-[2rem] p-7 my-4 sm:my-8 animate-pop-in" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-display text-2xl font-semibold text-ink mb-1">Ajouter un produit</h3>
+            <p className="text-sm text-muted mb-5">Photo, prix, nom et une description optionnelle.</p>
 
             <div className="space-y-4">
-              <input
-                type="text"
-                className="w-full px-4 py-3 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-yellow-500 outline-none"
-                placeholder="Nom du produit"
-                value={newProductName}
-                onChange={(e) => setNewProductName(e.target.value)}
-              />
-              <input
-                type="number"
-                min={0}
-                className="w-full px-4 py-3 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-yellow-500 outline-none"
-                placeholder="Prix (FCFA)"
-                value={newProductPrice}
-                onChange={(e) => setNewProductPrice(Number(e.target.value))}
-              />
-              <div className="space-y-2">
-                <label className="block text-sm font-bold text-gray-600">Photo du produit</label>
+              <input type="text" className="field" placeholder="Nom du produit" value={newProductName} onChange={(e) => setNewProductName(e.target.value)} />
+              <div className="grid grid-cols-2 gap-3">
+                <input type="number" min={0} className="field" placeholder="Prix (FCFA)" value={newProductPrice || ''} onChange={(e) => setNewProductPrice(Number(e.target.value))} />
+                <select className="field" value={newProductCategory} onChange={(e) => setNewProductCategory(e.target.value)} aria-label="Catégorie du produit">
+                  {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="label" htmlFor="p-threshold">Seuil d'alerte stock</label>
+                <input id="p-threshold" type="number" min={0} className="field" placeholder="Ex : 10" value={newProductThreshold || ''} onChange={(e) => setNewProductThreshold(Number(e.target.value))} />
+              </div>
+              <div>
+                <label className="label">Photo du produit</label>
                 <input
                   key={productImageInputKey}
                   type="file"
                   accept="image/*"
-                  className="w-full px-4 py-3 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-yellow-500 outline-none file:mr-3 file:px-3 file:py-1.5 file:rounded-xl file:border-0 file:bg-yellow-100 file:text-yellow-800 file:font-bold"
+                  aria-label="Photo du produit"
+                  className="field !py-2.5 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-accent/15 file:text-accentStrong file:font-semibold"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
                     const reader = new FileReader();
-                    reader.onload = () => {
-                      if (typeof reader.result === 'string') {
-                        setNewProductImageUrl(reader.result);
-                      }
-                    };
+                    reader.onload = () => { if (typeof reader.result === 'string') setNewProductImageUrl(reader.result); };
                     reader.readAsDataURL(file);
                   }}
                 />
-                {newProductImageUrl && (
-                  <img
-                    src={newProductImageUrl}
-                    alt="Apercu produit"
-                    className="w-24 h-24 object-cover rounded-xl border"
-                  />
-                )}
+                {newProductImageUrl && <img src={newProductImageUrl} alt="Aperçu produit" className="w-24 h-24 object-cover rounded-xl border border-line/10 mt-3" />}
               </div>
-              <textarea
-                className="w-full px-4 py-3 bg-gray-50 rounded-2xl border-2 border-transparent focus:border-yellow-500 outline-none resize-none"
-                placeholder="Description (optionnelle)"
-                rows={3}
-                value={newProductDescription}
-                onChange={(e) => setNewProductDescription(e.target.value)}
-              />
+              <textarea className="field" placeholder="Description (optionnelle)" rows={3} value={newProductDescription} onChange={(e) => setNewProductDescription(e.target.value)} />
             </div>
 
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => {
                   setShowAddProduct(false);
-                  setNewProductName('');
-                  setNewProductPrice(0);
-                  setNewProductImageUrl('');
-                  setNewProductDescription('');
+                  setNewProductName(''); setNewProductPrice(0); setNewProductImageUrl(''); setNewProductDescription('');
                   setProductImageInputKey(prev => prev + 1);
                 }}
-                className="flex-1 bg-gray-100 text-gray-600 font-bold py-4 rounded-2xl"
+                className="btn btn-ghost flex-1"
               >
                 Annuler
               </button>
@@ -431,46 +499,39 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onUpdateProduc
                 onClick={() => {
                   if (!newProductName.trim() || newProductPrice <= 0 || !newProductImageUrl.trim() || isSavingProduct) return;
                   setIsSavingProduct(true);
-                  const createdProduct: Product = {
-                    id: `p-${Date.now()}`,
+                  const createdProduct: Omit<Product, 'id'> = {
                     name: newProductName.trim(),
                     description: newProductDescription.trim(),
-                    category: 'Autre',
+                    category: newProductCategory,
                     price: newProductPrice,
                     initialStock: 0,
                     currentStock: 0,
-                    imageUrl: newProductImageUrl.trim()
+                    lowStockThreshold: newProductThreshold || 10,
+                    imageUrl: newProductImageUrl.trim(),
                   };
                   window.setTimeout(() => {
-                    onUpdateProducts([...state.products, createdProduct]);
+                    onAddProduct(createdProduct);
                     setShowAddProduct(false);
-                    setNewProductName('');
-                    setNewProductPrice(0);
-                    setNewProductImageUrl('');
-                    setNewProductDescription('');
+                    setNewProductName(''); setNewProductPrice(0); setNewProductImageUrl(''); setNewProductDescription(''); setNewProductCategory('Bière'); setNewProductThreshold(10);
                     setProductImageInputKey(prev => prev + 1);
                     setIsSavingProduct(false);
-                    pushToast('Produit ajoute avec succes');
+                    pushToast('Produit ajouté');
                   }, 550);
                 }}
-                className="flex-1 bg-yellow-500 text-gray-900 font-black py-4 rounded-2xl shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn btn-primary flex-1"
                 disabled={!newProductName.trim() || newProductPrice <= 0 || !newProductImageUrl.trim() || isSavingProduct}
               >
-                {isSavingProduct ? 'AJOUT...' : 'AJOUTER'}
+                {isSavingProduct ? 'Ajout…' : 'Ajouter'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      <div className="fixed top-4 right-4 z-[250] space-y-2 pointer-events-none">
+      {/* Toasts */}
+      <div className="fixed top-24 right-4 z-[250] space-y-2 pointer-events-none">
         {toasts.map(toast => (
-          <div
-            key={toast.id}
-            className={`px-4 py-3 rounded-2xl text-sm font-bold text-white shadow-xl animate-toast-in ${
-              toast.tone === 'success' ? 'bg-emerald-600' : 'bg-gray-900'
-            }`}
-          >
+          <div key={toast.id} className={`px-4 py-3 rounded-2xl text-sm font-semibold shadow-lift animate-toast-in ${toast.tone === 'success' ? 'bg-positive text-white' : 'bg-ink text-bg'}`}>
             {toast.message}
           </div>
         ))}

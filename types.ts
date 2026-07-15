@@ -29,10 +29,11 @@ export interface Product {
   id: string;
   name: string;
   description: string;
-  category: 'Bière' | 'Sucrerie' | 'Plat' | 'Autre';
+  category: 'Bière' | 'Sucrerie' | 'Plat' | 'Autre' | string;
   price: number;
   initialStock: number;
   currentStock: number;
+  lowStockThreshold?: number;
   imageUrl: string;
 }
 
@@ -61,11 +62,15 @@ export interface Establishment {
   description: string;
   logoUrl: string;
   coverUrl: string;
-  secretCode: string;
+  address?: string;
+  lat?: number | null;
+  lng?: number | null;
+  secretCode?: string;
   products: Product[];
   orders: Order[];
   employees: Employee[];
   notifications: Notification[];
+  loaded?: boolean;
 }
 
 export interface AppState {
