@@ -32,7 +32,7 @@ export default defineConfig({
       workbox: {
         // SPA: serve index.html for deep links (/b/:barId, /patron…) when offline
         navigateFallback: '/index.html',
-        globPatterns: ['**/*.{js,css,html,png,svg,webp}'],
+        globPatterns: ['**/*.{js,css,html,png,svg,webp,woff2}'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         // Never cache Supabase API / realtime traffic
         navigateFallbackDenylist: [/^\/rest\//, /^\/realtime\//],

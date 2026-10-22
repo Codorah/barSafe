@@ -1,3 +1,6 @@
+@tailwind base;
+@tailwind components;
+
 /* ============================================================
    BarSafe — "Nuit Chaude" design system
    Dual light/dark theme built on CSS custom-property tokens.
@@ -486,3 +489,15 @@ textarea.field { resize: vertical; min-height: 7rem; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
+
+/* Printing the table QR codes: only the cards, 3 per row */
+@media print {
+  body * { visibility: hidden; }
+  .grain, .no-print { display: none !important; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12mm; padding: 10mm; }
+  .qr-card { break-inside: avoid; box-shadow: none !important; border: 1px solid #ccc !important; background: #fff !important; color: #000 !important; }
+}
+
+/* Utilities last: they must win over the component classes above */
+@tailwind utilities;

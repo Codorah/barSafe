@@ -8,6 +8,8 @@ interface ClientMenuProps {
   orders: Order[];
   /** Prefilled when the client is signed in to an account. */
   defaultName?: string;
+  /** Table encoded in the QR code: preselected and locked. */
+  fixedTable?: number;
   onPlaceOrder: (items: { productId: string; quantity: number }[], table: number, method: PaymentMethod, clientName: string) => Promise<string | null> | void;
   onCallServer: (table: number) => Promise<boolean> | void;
 }
@@ -24,9 +26,9 @@ const STATUS_STEPS = [
   { key: OrderStatus.PAID, label: 'Payée', icon: 'fa-circle-check' },
 ];
 
-const ClientMenu: React.FC<ClientMenuProps> = ({ products, orders, defaultName = '', onPlaceOrder, onCallServer }) => {
+const ClientMenu: React.FC<ClientMenuProps> = ({ products, orders, defaultName = '', fixedTable, onPlaceOrder, onCallServer }) => {
   const [cart, setCart] = useState<{ [id: string]: number }>({});
-  const [table, setTable] = useState(1);
+  const [table, setTable] = useState(fixedTable ?? 1);
   const [showCheckout, setShowCheckout] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ESPECES');
   const [clientName, setClientName] = useState(defaultName);
@@ -83,13 +85,15 @@ const ClientMenu: React.FC<ClientMenuProps> = ({ products, orders, defaultName =
           <span className="w-12 h-12 rounded-xl bg-accent/14 text-accentStrong grid place-items-center font-display font-semibold text-lg">{table}</span>
           <div>
             <h1 className="font-display text-lg font-semibold text-ink leading-tight">Votre table</h1>
-            <p className="text-xs text-muted">Choisissez votre numéro de table</p>
+            <p className="text-xs text-muted">{fixedTable ? 'Défini par le QR code de votre table' : 'Choisissez votre numéro de table'}</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <select value={table} onChange={(e) => setTable(Number(e.target.value))} aria-label="Numéro de table" className="field !py-2.5 !w-auto">
-            {[1,2,3,4,5,6,7,8,9,10].map(n => <option key={n} value={n}>Table {n}</option>)}
-          </select>
+          {!fixedTable && (
+            <select value={table} onChange={(e) => setTable(Number(e.target.value))} aria-label="Numéro de table" className="field !py-2.5 !w-auto">
+              {Array.from({ length: 30 }, (_, i) => i + 1).map(n => <option key={n} value={n}>Table {n}</option>)}
+            </select>
+          )}
           <button onClick={handleCallServer} disabled={serverCalled} className="btn btn-outline btn-sm">
             <i className="fa-solid fa-bell" aria-hidden="true"></i>
             <span className="hidden sm:inline">{serverCalled ? 'Serveur appelé' : 'Appeler'}</span>

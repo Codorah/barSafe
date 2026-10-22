@@ -9,7 +9,7 @@ describe('toFriendlyError', () => {
     });
     expect(f.title).toBe('Service en cours de mise à jour');
     expect(f.message).not.toMatch(/schema|function|staff_login/i);
-    expect(f.hint).toMatch(/migration/);
+    expect(f.hint).toMatch(/APPLY_PRODUCTION.sql/);
     expect(f.retryable).toBe(true);
   });
 

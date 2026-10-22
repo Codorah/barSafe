@@ -14,6 +14,8 @@ interface PatronDashboardProps {
   onAddProduct: (product: Omit<Product, 'id'>) => Promise<boolean>;
   onDeleteProduct: (id: string) => Promise<boolean>;
   onAddStock: (productId: string, qty: number) => Promise<boolean>;
+  /** Compresses + stores a product photo; null when it failed (already reported). */
+  onUploadImage: (file: File) => Promise<string | null>;
 }
 
 const CATEGORIES = ['Bière', 'Sucrerie', 'Plat', 'Autre'];
@@ -26,7 +28,7 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'QR_CODE', label: 'QR Code' },
 ];
 
-const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onAddProduct, onDeleteProduct, onAddStock }) => {
+const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onAddProduct, onDeleteProduct, onAddStock, onUploadImage }) => {
   const { resolved } = useTheme();
   const [activeTab, setActiveTab] = useState<Tab>('STATS');
   const [showAddProduct, setShowAddProduct] = useState(false);
@@ -112,7 +114,13 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onAddProduct, 
     .sort((a, b) => b.sold - a.sold)
     .slice(0, 5);
 
-  const qrValue = `${window.location.origin}/b/${state.currentUser?.establishmentId}`;
+  // One QR per table: the menu opens with the table already set
+  const [tableCount, setTableCount] = useState(() => {
+    const saved = Number(localStorage.getItem('barsafe_table_count'));
+    return saved >= 1 && saved <= 100 ? saved : 10;
+  });
+  const qrFor = (table: number) => `${window.location.origin}/b/${state.currentUser?.establishmentId}?t=${table}`;
+  const [imageUploading, setImageUploading] = useState(false);
 
   const paidOrders = state.orders.filter(o => o.status === OrderStatus.PAID);
   const paidCount = paidOrders.length;
@@ -396,15 +404,42 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onAddProduct, 
         </div>
       )}
 
-      {/* QR CODE */}
+      {/* QR CODE : un code par table */}
       {activeTab === 'QR_CODE' && (
-        <div className="panel p-10 sm:p-12 flex flex-col items-center max-w-md mx-auto text-center animate-rise-in">
-          <div className="bg-white p-5 rounded-3xl shadow-soft mb-6">
-            <QRCode value={qrValue} size={220} />
+        <div className="space-y-6 animate-rise-in">
+          <div className="panel p-6 sm:p-8 flex flex-wrap items-end justify-between gap-5 no-print">
+            <div className="max-w-md">
+              <h3 className="font-display text-2xl font-semibold text-ink">QR codes des tables</h3>
+              <p className="text-muted text-sm mt-1.5 pretty">Chaque code ouvre le menu avec le bon numéro de table : le client n’a rien à saisir. Imprimez-les et posez chacun sur sa table.</p>
+            </div>
+            <div className="flex items-end gap-3">
+              <div>
+                <label className="label" htmlFor="table-count">Nombre de tables</label>
+                <input
+                  id="table-count" type="number" min={1} max={100} className="field !w-28"
+                  value={tableCount}
+                  onChange={(e) => {
+                    const n = Math.max(1, Math.min(100, Number(e.target.value) || 1));
+                    setTableCount(n);
+                    try { localStorage.setItem('barsafe_table_count', String(n)); } catch { /* storage unavailable */ }
+                  }}
+                />
+              </div>
+              <button onClick={() => window.print()} className="btn btn-primary"><i className="fa-solid fa-print" aria-hidden="true"></i> Imprimer</button>
+            </div>
           </div>
-          <h3 className="font-display text-2xl font-semibold text-ink">QR Code de commande</h3>
-          <p className="text-muted text-sm mt-2">Imprimez ce code et posez-le sur chaque table.</p>
-          <p className="mt-6 text-xs font-medium text-muted bg-surface2 border border-line/8 px-5 py-3 rounded-2xl break-all">{qrValue}</p>
+
+          <div className="print-area grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+            {Array.from({ length: tableCount }, (_, i) => i + 1).map(n => (
+              <div key={n} className="qr-card card p-4 flex flex-col items-center text-center">
+                <div className="bg-white p-3 rounded-2xl w-full">
+                  <QRCode value={qrFor(n)} size={256} style={{ width: '100%', height: 'auto' }} />
+                </div>
+                <p className="font-display text-xl font-semibold text-ink mt-3">Table {n}</p>
+                <p className="text-xs text-muted">Scannez pour commander</p>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -471,14 +506,18 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onAddProduct, 
                   accept="image/*"
                   aria-label="Photo du produit"
                   className="field !py-2.5 file:mr-3 file:px-3 file:py-1.5 file:rounded-lg file:border-0 file:bg-accent/15 file:text-accentStrong file:font-semibold"
-                  onChange={(e) => {
+                  disabled={imageUploading}
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
                     if (!file) return;
-                    const reader = new FileReader();
-                    reader.onload = () => { if (typeof reader.result === 'string') setNewProductImageUrl(reader.result); };
-                    reader.readAsDataURL(file);
+                    setImageUploading(true);
+                    const url = await onUploadImage(file);
+                    setImageUploading(false);
+                    if (url) setNewProductImageUrl(url);
+                    else setProductImageInputKey(k => k + 1);
                   }}
                 />
+                {imageUploading && <p className="text-xs text-accentStrong mt-2"><i className="fa-solid fa-circle-notch fa-spin mr-1.5" aria-hidden="true"></i>Optimisation de la photo…</p>}
                 {newProductImageUrl && <img src={newProductImageUrl} alt="Aperçu produit" className="w-24 h-24 object-cover rounded-xl border border-line/10 mt-3" />}
               </div>
               <textarea className="field" placeholder="Description (optionnelle)" rows={3} value={newProductDescription} onChange={(e) => setNewProductDescription(e.target.value)} />

@@ -1,6 +1,7 @@
 import { supabase } from './supabaseClient';
 import { Establishment, Order, Product, Notification, UserRole, OrderStatus, PaymentMethod } from './types';
 import { FriendlyError, ErrorTone, toFriendlyError } from './lib/errors';
+import { blobToDataUrl, compressImage, ImageKind } from './lib/image';
 
 // ---------- mappers (DB row -> app type) ----------
 /* eslint-disable @typescript-eslint/no-explicit-any -- raw PostgREST rows */
@@ -158,6 +159,40 @@ export const api = {
   async myEstablishments(): Promise<Establishment[]> {
     const data = await rpc<unknown[]>('my_establishments', {});
     return (data || []).map(mapEstablishment);
+  },
+
+  /**
+   * Compresses then stores an image; returns the URL to save on the bar/product.
+   * Uses the `upload-image` Edge Function (Storage). If that function is not deployed
+   * yet, falls back to an inline compressed data URL (capped server-side at ~150 KB).
+   */
+  async uploadImage(file: File, kind: ImageKind, staffToken?: string): Promise<string> {
+    let blob: Blob;
+    try {
+      blob = await compressImage(file, kind);
+    } catch (e) {
+      throw new ApiError({ title: 'Image refusée', message: (e as Error).message, tone: 'error', retryable: false });
+    }
+    const form = new FormData();
+    form.append('file', new File([blob], `${kind}.${blob.type === 'image/webp' ? 'webp' : 'jpg'}`, { type: blob.type }));
+    form.append('kind', kind);
+    if (staffToken) form.append('token', staffToken);
+
+    const { data, error } = await supabase.functions.invoke<{ url?: string; error?: string }>('upload-image', { body: form });
+    if (!error && data?.url) return data.url;
+
+    // Function answered with a reason (403, 413…): show it
+    const status = (error as { context?: Response } | null)?.context?.status;
+    if (error && status && status !== 404) {
+      let message = 'L’image n’a pas pu être envoyée.';
+      try { message = (await (error as unknown as { context: Response }).context.json()).error || message; } catch { /* not JSON */ }
+      throw new ApiError({ title: 'Image non envoyée', message, tone: 'error', retryable: status >= 500 });
+    }
+    // Function not deployed (404) or unreachable: keep a small inline copy
+    if (blob.size > 150 * 1024) {
+      throw new ApiError({ title: 'Image trop lourde', message: 'Choisissez une image plus légère.', tone: 'error', retryable: false });
+    }
+    return blobToDataUrl(blob);
   },
 
   /** Right to erasure: deletes the signed-in account (orders are kept, detached). */

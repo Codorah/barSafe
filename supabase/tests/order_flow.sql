@@ -13,9 +13,6 @@ insert into auth.users (id, email, aud, role, raw_user_meta_data) values
   ('00000000-0000-4000-a000-000000000003', 'client@test.local',   'authenticated', 'authenticated', '{"account_type":"CUSTOMER","full_name":"Kossi"}'),
   ('00000000-0000-4000-a000-000000000004', 'pirate@test.local',   'authenticated', 'authenticated', '{"account_type":"ADMIN"}');
 
-create temp table t (k text primary key, v uuid);
-grant all on t to anon, authenticated;
-
 do $$
 declare
   owner1 uuid := '00000000-0000-4000-a000-000000000001';
@@ -33,12 +30,12 @@ begin
   -- Création de bar : refusée sans compte et pour un compte client
   perform set_config('request.jwt.claims', '', true);
   v_failed := false;
-  begin perform create_establishment('X', '', '', '', '', null, null, '1234', '1111', '2222'); exception when others then v_failed := true; end;
+  begin perform create_establishment('X', '', '', '', '', null, null, '123456', '111111', '222222'); exception when others then v_failed := true; end;
   assert v_failed, 'création de bar sans compte refusée';
 
   perform set_config('request.jwt.claims', json_build_object('sub', client, 'role', 'authenticated')::text, true);
   v_failed := false;
-  begin perform create_establishment('X', '', '', '', '', null, null, '1234', '1111', '2222'); exception when others then v_failed := true; end;
+  begin perform create_establishment('X', '', '', '', '', null, null, '123456', '111111', '222222'); exception when others then v_failed := true; end;
   assert v_failed, 'un compte client ne crée pas de bar';
 
   -- Un client peut devenir établissement (connexion Google, ou depuis Mon compte)
@@ -47,14 +44,14 @@ begin
   update profiles set role = 'CUSTOMER' where id = client;   -- on le remet client pour la suite
 
   perform set_config('request.jwt.claims', json_build_object('sub', owner1, 'role', 'authenticated')::text, true);
-  v_bar := create_establishment('Test Bar', '', '', '', '', null, null, '1234', '1111', '2222');
+  v_bar := create_establishment('Test Bar', '', '', '', '', null, null, '123456', '111111', '222222');
   assert (select owner_id from establishments where id = v_bar) = owner1, 'bar rattaché à son créateur';
   assert (select count(*) from my_establishments()) = 1, 'my_establishments';
   t_owner := owner_session(v_bar);
   assert (select role from staff_session(t_owner)) = 'PATRON', 'propriétaire => session Direction sans code';
 
   perform set_config('request.jwt.claims', json_build_object('sub', owner2, 'role', 'authenticated')::text, true);
-  v_other := create_establishment('Autre Bar', '', '', '', '', null, null, '9999', '8888', '7777');
+  v_other := create_establishment('Autre Bar', '', '', '', '', null, null, '999999', '888888', '777777');
   v_failed := false;
   begin perform owner_session(v_bar); exception when others then v_failed := true; end;
   assert v_failed, 'un autre propriétaire ne peut pas ouvrir ce bar';
@@ -62,16 +59,16 @@ begin
   perform set_config('request.jwt.claims', '', true);
 
   -- Codes hachés
-  assert not exists (select 1 from establishment_access where code_hash in ('1234', '1111', '2222')), 'codes hachés';
+  assert not exists (select 1 from establishment_access where code_hash in ('123456', '111111', '222222')), 'codes hachés';
 
   -- Connexion par code
-  t_patron := staff_login(v_bar, 'PATRON', '1234');
-  t_serveur := staff_login(v_bar, 'SERVEUR', '1111');
-  t_caisse := staff_login(v_bar, 'CAISSIER', '2222');
-  t_other := staff_login(v_other, 'PATRON', '9999');
+  t_patron := staff_login(v_bar, 'PATRON', '123456');
+  t_serveur := staff_login(v_bar, 'SERVEUR', '111111');
+  t_caisse := staff_login(v_bar, 'CAISSIER', '222222');
+  t_other := staff_login(v_other, 'PATRON', '999999');
   assert t_patron is not null and t_serveur is not null and t_caisse is not null, 'login valide';
-  assert staff_login(v_bar, 'PATRON', '0000') is null, 'mauvais code refusé';
-  assert staff_login(v_bar, 'SERVEUR', '1234') is null, 'code patron refusé sur le rôle serveur';
+  assert staff_login(v_bar, 'PATRON', '000000') is null, 'mauvais code refusé';
+  assert staff_login(v_bar, 'SERVEUR', '123456') is null, 'code patron refusé sur le rôle serveur';
 
   -- Catalogue
   v_beer := add_product(t_patron, 'Flag', '', 'Bière', 1000, 10, 3, '');
@@ -133,13 +130,31 @@ begin
   assert v_failed, 'encaissement refusé si stock insuffisant';
   assert add_stock(t_patron, v_dish, 10) = 11, 'réassort atomique';
 
+  -- Codes à 6 chiffres minimum pour un nouveau bar
+  perform set_config('request.jwt.claims', json_build_object('sub', owner1, 'role', 'authenticated')::text, true);
+  v_failed := false;
+  begin perform create_establishment('Court', '', '', '', '', null, null, '1234', '5678', '9012'); exception when others then v_failed := true; end;
+  assert v_failed, 'codes à 4 chiffres refusés';
+  perform set_config('request.jwt.claims', '', true);
+
+  -- Blocage par rôle : 8 erreurs sur Service ne bloquent pas la Caisse
+  -- (1 échec Service plus haut, « code patron refusé sur le rôle serveur », + 7 ici = 8)
+  for i in 1..7 loop
+    assert staff_login(v_bar, 'SERVEUR', '000000') is null, 'mauvais code refusé avant blocage';
+  end loop;
+  v_failed := false;
+  begin perform staff_login(v_bar, 'SERVEUR', '111111'); exception when others then v_failed := true; end;
+  assert v_failed, 'Service bloqué après 8 erreurs';
+  assert staff_login(v_bar, 'CAISSIER', '222222') is not null, 'la Caisse reste accessible';
+
   -- Déconnexion
   perform staff_logout(t_caisse);
   v_failed := false;
   begin perform pay_order(t_caisse, v_order2); exception when others then v_failed := true; end;
   assert v_failed, 'jeton révoqué refusé';
 
-  insert into t values ('bar', v_bar), ('order', v_order);
+  -- Transmis aux blocs suivants (joués avec d'autres rôles) jusqu'à la fin de la transaction
+  perform set_config('barsafe.test_bar', v_bar::text, true);
 end $$;
 
 -- Clé publique (client QR) : aucune lecture directe des données privées
@@ -175,7 +190,7 @@ begin
   begin update products set current_stock = 999; exception when insufficient_privilege then v_failed := true; end;
   assert v_failed, 'stock non modifiable en direct';
 
-  assert (select count(*) from products where establishment_id = (select v from t where k = 'bar')) = 2, 'menu public lisible';
+  assert (select count(*) from products where establishment_id = current_setting('barsafe.test_bar')::uuid) = 2, 'menu public lisible';
 end $$;
 reset role;
 

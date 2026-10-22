@@ -76,12 +76,21 @@ cp .env.example .env.local     # renseigner VITE_SUPABASE_URL et VITE_SUPABASE_A
 npm run dev
 ```
 
-Base de données (éditeur SQL Supabase, dans l'ordre) :
-1. `schema.sql`
-2. `supabase/migrations/20261022120000_secure_rpc_sessions.sql`
-3. `supabase/migrations/20261023090000_accounts_and_private_orders.sql`
-4. `supabase/migrations/20261023120000_become_owner.sql`
-5. `supabase/tests/order_flow.sql` (vérification, tout est annulé à la fin)
+Base de données (Supabase > SQL Editor) :
+1. Nouveau projet : `schema.sql` puis `supabase/migrations/20261022120000_secure_rpc_sessions.sql`
+2. `supabase/APPLY_PRODUCTION.sql` (comptes, commandes privées, durcissement ; une seule transaction)
+3. `supabase/tests/order_flow.sql` pour vérifier (tout est annulé à la fin)
+4. Avant l'ouverture : `supabase/cleanup_demo_data.sql` (supprime les bars de démonstration sans propriétaire)
+
+Images : déployer la fonction Edge `supabase/functions/upload-image` (`supabase functions deploy upload-image`,
+ou Supabase > Edge Functions > « Deploy a new function » en collant le fichier). Sans elle, les images restent
+compressées en base (150 Ko max).
+
+E-mails : coller les modèles de `supabase/templates/` dans Supabase > Authentication > Emails, et brancher un
+SMTP (Resend, Brevo…) : le serveur d'e-mails par défaut de Supabase est limité à quelques envois par heure.
+
+Hébergement : `vercel.json`, `public/_redirects` (Netlify) et `public/.htaccess` (Apache / Hostinger) renvoient
+toutes les routes vers `index.html` (liens QR `/b/...`, retour de Google, rechargements).
 
 Qualité : `npm run typecheck`, `npm run lint`, `npm test`.
 

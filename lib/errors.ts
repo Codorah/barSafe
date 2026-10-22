@@ -81,7 +81,7 @@ export const toFriendlyError = (err: unknown): FriendlyError => {
         title: 'Service en cours de mise à jour',
         message: 'Cette fonctionnalité n’est pas encore disponible sur le serveur. Réessayez dans quelques minutes.',
         tone: 'warning', code, retryable: true,
-        hint: 'La base Supabase n’a pas la dernière migration : appliquez supabase/migrations/20261022120000_secure_rpc_sessions.sql.',
+        hint: 'La base Supabase n’est pas à jour : exécutez supabase/APPLY_PRODUCTION.sql dans le SQL Editor.',
       };
     case SESSION_EXPIRED:
       return { title: 'Session expirée', message: 'Par sécurité, reconnectez-vous avec votre code d’accès.', tone: 'info', code, retryable: false };

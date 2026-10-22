@@ -525,6 +525,7 @@ const Landing: React.FC<LandingProps> = ({ onStart }) => {
           <ThemeToggle className="sm:hidden" />
           <nav className="flex items-center gap-5" aria-label="Liens légaux">
             <Link to="/connexion" className="hover:text-ink">Se connecter</Link>
+            <Link to="/mentions-legales" className="hover:text-ink">Mentions légales</Link>
             <Link to="/confidentialite" className="hover:text-ink">Confidentialité</Link>
             <Link to="/confidentialite#cookies" className="hover:text-ink">Cookies</Link>
             <span className="text-faint">Photos : Unsplash</span>

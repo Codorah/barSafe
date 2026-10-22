@@ -95,7 +95,7 @@ const PrivacyPage: React.FC = () => {
         <Section id="partage" title="5. Avec qui sont-elles partagées ?">
           <ul className="list-disc pl-5 space-y-2">
             <li><strong className="text-ink">Supabase</strong> (base de données, comptes, temps réel), serveurs situés à Paris (Union européenne). Vos données sont donc hébergées hors du Togo, chez un prestataire soumis au RGPD.</li>
-            <li><strong className="text-ink">Ressources externes chargées par votre navigateur</strong>, qui reçoivent votre adresse IP : polices Google Fonts, icônes et styles (cdnjs, Tailwind CDN), images (Unsplash, DiceBear), carte et recherche d’adresse (OpenStreetMap).</li>
+            <li><strong className="text-ink">Ressources externes chargées par votre navigateur</strong>, qui reçoivent votre adresse IP : polices Google Fonts, images par défaut (Unsplash, DiceBear), carte et recherche d’adresse (OpenStreetMap). Les photos envoyées par les établissements sont stockées chez Supabase.</li>
             <li><strong className="text-ink">Google</strong>, uniquement si vous utilisez « Continuer avec Google » : Google sait alors que vous vous connectez à BarSafe, selon sa propre politique de confidentialité.</li>
             <li>L’établissement où vous commandez, pour les commandes qui le concernent.</li>
           </ul>

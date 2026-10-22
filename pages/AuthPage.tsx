@@ -243,7 +243,7 @@ const AuthPage: React.FC<{ initialMode: 'login' | 'signup' }> = ({ initialMode }
                 {mode === 'signup' && (
                   <label className="flex items-start gap-3 text-sm text-muted cursor-pointer">
                     <input type="checkbox" checked={consent} onChange={e => setConsent(e.target.checked)} className="mt-1 w-4 h-4 accent-[rgb(var(--accent))]" />
-                    <span>J’ai lu la <Link to="/confidentialite" className="link" target="_blank">politique de confidentialité</Link> et j’accepte le traitement de mes données pour la gestion de mon compte.</span>
+                    <span>J’accepte les <Link to="/mentions-legales" className="link" target="_blank">conditions d’utilisation</Link> et j’ai lu la <Link to="/confidentialite" className="link" target="_blank">politique de confidentialité</Link>.</span>
                   </label>
                 )}
 

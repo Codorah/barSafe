@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { NewEstablishmentInput } from '../api';
+import { api, ApiError, NewEstablishmentInput } from '../api';
 
 interface CreateBarWizardProps {
   onClose: () => void;
@@ -40,12 +40,23 @@ const CreateBarWizard: React.FC<CreateBarWizardProps> = ({ onClose, onCreate, on
 
   const set = (patch: Partial<Form>) => setForm(prev => ({ ...prev, ...patch }));
 
-  const upload = (e: React.ChangeEvent<HTMLInputElement>, field: 'logoUrl' | 'coverUrl') => {
+  const [uploading, setUploading] = useState<'logoUrl' | 'coverUrl' | null>(null);
+  const [imageError, setImageError] = useState<string | null>(null);
+
+  /** Compressed and stored server-side; the form only keeps the resulting URL. */
+  const upload = async (e: React.ChangeEvent<HTMLInputElement>, field: 'logoUrl' | 'coverUrl') => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => set({ [field]: reader.result as string } as Partial<Form>);
-    reader.readAsDataURL(file);
+    setImageError(null);
+    setUploading(field);
+    try {
+      set({ [field]: await api.uploadImage(file, field === 'logoUrl' ? 'logo' : 'cover') } as Partial<Form>);
+    } catch (err) {
+      setImageError(ApiError.from(err, 'wizardImage').message);
+    } finally {
+      setUploading(null);
+    }
   };
 
   const captureLocation = () => {
@@ -68,12 +79,12 @@ const CreateBarWizard: React.FC<CreateBarWizardProps> = ({ onClose, onCreate, on
     );
   };
 
-  const codeOk = (c: string) => /^\d{4,8}$/.test(c);
+  const codeOk = (c: string) => /^\d{6,8}$/.test(c);
   const nameValid = form.name.trim().length >= 2;
   const codesFilled = codeOk(form.codePatron) && codeOk(form.codeServeur) && codeOk(form.codeCaissier);
   const codesDistinct = new Set([form.codePatron, form.codeServeur, form.codeCaissier]).size === 3;
   const codesValid = codesFilled && codesDistinct;
-  const canContinue = step === 0 ? nameValid : step === 3 ? codesValid : true;
+  const canContinue = !uploading && (step === 0 ? nameValid : step === 3 ? codesValid : true);
 
   const finish = async () => {
     setIsCreating(true);
@@ -142,7 +153,7 @@ const CreateBarWizard: React.FC<CreateBarWizardProps> = ({ onClose, onCreate, on
               <div className="animate-fade-in">
                 <div className="w-16 h-16 rounded-2xl bg-positive/15 text-positive grid place-items-center text-2xl mb-5"><i className="fa-solid fa-check" /></div>
                 <h3 className="font-display text-2xl font-semibold text-ink mb-1">« {form.name.trim()} » est prêt</h3>
-                <p className="text-sm text-muted mb-6 pretty">Notez bien ces codes d'accès — ils permettent à votre équipe de se connecter à chaque espace.</p>
+                <p className="text-sm text-muted mb-6 pretty">Notez bien ces codes d'accès : ils permettent à votre équipe de se connecter à chaque espace.</p>
                 <div className="space-y-2.5 mb-7">
                   {[
                     { label: 'Direction', code: form.codePatron, icon: 'fa-crown' },
@@ -190,7 +201,7 @@ const CreateBarWizard: React.FC<CreateBarWizardProps> = ({ onClose, onCreate, on
                         <label className="label">Logo</label>
                         <div className="flex items-center gap-4">
                           <button type="button" onClick={() => logoRef.current?.click()} className="w-20 h-20 rounded-2xl border-2 border-dashed border-line/20 grid place-items-center overflow-hidden bg-surface2 hover:border-accent/60 transition-colors">
-                            {form.logoUrl ? <img src={form.logoUrl} alt="Aperçu logo" className="w-full h-full object-cover" /> : <i className="fa-solid fa-camera text-faint text-xl" />}
+                            {uploading === 'logoUrl' ? <i className="fa-solid fa-circle-notch fa-spin text-accentStrong text-xl" aria-label="Envoi en cours" /> : form.logoUrl ? <img src={form.logoUrl} alt="Aperçu logo" className="w-full h-full object-cover" /> : <i className="fa-solid fa-camera text-faint text-xl" />}
                           </button>
                           <div>
                             <button type="button" onClick={() => logoRef.current?.click()} className="btn btn-outline btn-sm"><i className="fa-solid fa-image" /> Choisir un logo</button>
@@ -202,10 +213,15 @@ const CreateBarWizard: React.FC<CreateBarWizardProps> = ({ onClose, onCreate, on
                       <div>
                         <label className="label">Photo de couverture</label>
                         <button type="button" onClick={() => coverRef.current?.click()} className="w-full h-44 rounded-2xl border-2 border-dashed border-line/20 grid place-items-center overflow-hidden bg-surface2 hover:border-accent/60 transition-colors">
-                          {form.coverUrl ? <img src={form.coverUrl} alt="Aperçu couverture" className="w-full h-full object-cover" /> : <span className="flex flex-col items-center gap-2 text-faint"><i className="fa-solid fa-panorama text-2xl" /><span className="text-xs font-medium">Ajouter une photo</span></span>}
+                          {uploading === 'coverUrl' ? <span className="flex flex-col items-center gap-2 text-accentStrong"><i className="fa-solid fa-circle-notch fa-spin text-2xl" /><span className="text-xs font-medium">Optimisation de la photo…</span></span> : form.coverUrl ? <img src={form.coverUrl} alt="Aperçu couverture" className="w-full h-full object-cover" /> : <span className="flex flex-col items-center gap-2 text-faint"><i className="fa-solid fa-panorama text-2xl" /><span className="text-xs font-medium">Ajouter une photo</span></span>}
                         </button>
                         <input ref={coverRef} type="file" accept="image/*" className="hidden" aria-label="Couverture" onChange={(e) => upload(e, 'coverUrl')} />
                       </div>
+                      {imageError && (
+                        <p className="flex items-center gap-2 rounded-xl bg-danger/12 text-danger px-3.5 py-2.5 text-sm font-medium" role="alert">
+                          <i className="fa-solid fa-circle-exclamation" aria-hidden="true"></i> {imageError}
+                        </p>
+                      )}
                     </div>
                   )}
 
@@ -230,7 +246,7 @@ const CreateBarWizard: React.FC<CreateBarWizardProps> = ({ onClose, onCreate, on
                   {step === 3 && (
                     <div className="space-y-5">
                       <h3 className="font-display text-2xl font-semibold text-ink">Codes d'accès</h3>
-                      <p className="text-sm text-muted -mt-2 pretty">Un code par espace (4 à 8 chiffres). Ils protègent la connexion de votre équipe.</p>
+                      <p className="text-sm text-muted -mt-2 pretty">Un code par espace (6 à 8 chiffres). Ils protègent la connexion de votre équipe.</p>
                       {[
                         { key: 'codePatron' as const, label: 'Direction', icon: 'fa-crown', val: form.codePatron },
                         { key: 'codeServeur' as const, label: 'Service', icon: 'fa-bell-concierge', val: form.codeServeur },
@@ -240,7 +256,7 @@ const CreateBarWizard: React.FC<CreateBarWizardProps> = ({ onClose, onCreate, on
                           <span className="w-11 h-11 rounded-xl bg-accent/12 text-accentStrong grid place-items-center shrink-0"><i className={`fa-solid ${r.icon}`} /></span>
                           <div className="flex-1">
                             <label className="label !mb-1" htmlFor={r.key}>{r.label}</label>
-                            <input id={r.key} inputMode="numeric" className="field tracking-[0.3em] font-semibold tabnum" placeholder="••••" value={r.val} onChange={(e) => set({ [r.key]: e.target.value.replace(/\D/g, '').slice(0, 8) } as Partial<Form>)} />
+                            <input id={r.key} inputMode="numeric" className="field tracking-[0.3em] font-semibold tabnum" placeholder="••••••" value={r.val} onChange={(e) => set({ [r.key]: e.target.value.replace(/\D/g, '').slice(0, 8) } as Partial<Form>)} />
                           </div>
                         </div>
                       ))}

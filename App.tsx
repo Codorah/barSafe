@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from 'react';
-import { Routes, Route, useNavigate, useLocation, useParams, Navigate, Link } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, useParams, useSearchParams, Navigate, Link } from 'react-router-dom';
 import { AppState, UserRole, OrderStatus, Establishment, Product, PaymentMethod } from './types';
 import { api, ApiError, NewEstablishmentInput, SESSION_EXPIRED } from './api';
 import { loadSession, saveSession, hasVisited, StoredSession } from './lib/session';
@@ -10,6 +10,7 @@ import { useAuth } from './lib/auth';
 import BarList from './pages/BarList';
 import AuthPage from './pages/AuthPage';
 import AccountPage from './pages/AccountPage';
+import LegalPage from './pages/LegalPage';
 import PrivacyPage from './pages/PrivacyPage';
 import Login from './pages/Login';
 import ClientMenu from './pages/ClientMenu';
@@ -31,7 +32,7 @@ import { Toaster, ToastItem, OfflineBanner } from './components/Toaster';
 /** Routes that draw their own full-bleed layout (no navbar, no centered container). */
 const LANDING_PATHS = ['/', '/decouvrir'];
 /** Public pages with their own <SiteHeader>, never the role navbar. */
-const PUBLIC_PATHS = ['/etablissements', '/connexion', '/inscription', '/compte', '/confidentialite'];
+const PUBLIC_PATHS = ['/etablissements', '/connexion', '/inscription', '/compte', '/confidentialite', '/mentions-legales'];
 
 const BAR_LOADING = 'Chargement des données du bar…';
 
@@ -42,12 +43,24 @@ const HomeGate: React.FC<{ onStart: () => void }> = ({ onStart }) => {
   return firstVisit ? <Landing onStart={onStart} /> : <Navigate to="/etablissements" replace />;
 };
 
-const QRCodeRedirect: React.FC<{ establishments: Establishment[]; loading: boolean; onMapGuest: (barId: string) => void }> = ({ establishments, loading, onMapGuest }) => {
+/** Table number printed in the QR (?t=4), kept for the visit so a reload keeps it. */
+const TABLE_KEY = 'barsafe_table';
+const readTable = (barId: string | null): number | undefined => {
+  try {
+    const v = JSON.parse(sessionStorage.getItem(TABLE_KEY) || 'null');
+    return v && v.barId === barId && Number.isInteger(v.table) ? v.table : undefined;
+  } catch { return undefined; }
+};
+
+const QRCodeRedirect: React.FC<{ establishments: Establishment[]; loading: boolean; onMapGuest: (barId: string, table?: number) => void }> = ({ establishments, loading, onMapGuest }) => {
   const { barId } = useParams();
+  const [search] = useSearchParams();
+  const table = Number(search.get('t'));
+  const validTable = Number.isInteger(table) && table >= 1 && table <= 999 ? table : undefined;
   const found = !!barId && establishments.some(e => e.id === barId);
   useEffect(() => {
-    if (found && barId) onMapGuest(barId);
-  }, [found, barId, onMapGuest]);
+    if (found && barId) onMapGuest(barId, validTable);
+  }, [found, barId, validTable, onMapGuest]);
 
   if (!loading && !found) {
     return (
@@ -111,6 +124,8 @@ const App: React.FC = () => {
   // Read inside refreshBar without re-creating it (and re-subscribing) on every login
   const tokenRef = useRef<string | null>(null);
   tokenRef.current = token;
+  const stateRef = useRef(state);
+  stateRef.current = state;
   /** Bumped when this device places an order, to listen to its new tracking topic. */
   const [trackVersion, setTrackVersion] = useState(0);
 
@@ -133,7 +148,9 @@ const App: React.FC = () => {
     } catch (e) {
       const err = ApiError.from(e, 'refreshBar');
       setBarError(err);
-      showError(err, () => refreshBar(barId));
+      // First load: the screen shows <ErrorState> with its own retry, no duplicate toast.
+      // Background refresh (data already on screen): a toast is the only signal.
+      if (stateRef.current.establishments.find(b => b.id === barId)?.loaded) showError(err, () => refreshBar(barId));
     }
   }, [showError]);
 
@@ -301,7 +318,10 @@ const App: React.FC = () => {
     navigate('/etablissements');
   };
 
-  const handleGuestAccess = useCallback((barId: string) => {
+  const handleGuestAccess = useCallback((barId: string, table?: number) => {
+    try {
+      if (table) sessionStorage.setItem(TABLE_KEY, JSON.stringify({ barId, table }));
+    } catch { /* storage unavailable */ }
     startSession({ name: 'Client', role: UserRole.CLIENT, establishmentId: barId });
     navigate('/menu', { replace: true });
   }, [startSession, navigate]);
@@ -398,6 +418,7 @@ const App: React.FC = () => {
           <Route path="/connexion" element={<AuthPage key="login" initialMode="login" />} />
           <Route path="/inscription" element={<AuthPage key="signup" initialMode="signup" />} />
           <Route path="/confidentialite" element={<PrivacyPage />} />
+          <Route path="/mentions-legales" element={<LegalPage />} />
           <Route path="/compte" element={
             <AccountPage
               onOpenBar={(bar, staffToken) => openOwnedBar(bar.id, staffToken)}
@@ -435,6 +456,7 @@ const App: React.FC = () => {
                 products={bar.products}
                 orders={bar.orders}
                 defaultName={profile?.fullName}
+                fixedTable={readTable(bar.id)}
                 onPlaceOrder={placeClientOrder}
                 onCallServer={callServer}
               />
@@ -479,6 +501,11 @@ const App: React.FC = () => {
                 onAddProduct={(product: Omit<Product, 'id'>) => run(t => api.addProduct(t, product))}
                 onDeleteProduct={(id: string) => run(t => api.deleteProduct(t, id))}
                 onAddStock={(productId, qty) => run(t => api.addStock(t, productId, qty))}
+                onUploadImage={async (file) => {
+                  if (!token) return null;
+                  try { return await api.uploadImage(file, 'product', token); }
+                  catch (e) { showError(e); return null; }
+                }}
               />
             ))}
             </ProtectedRoute>
@@ -492,6 +519,7 @@ const App: React.FC = () => {
 
       <footer className="w-full max-w-content mx-auto px-4 sm:px-6 pb-8 pt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-1 text-xs text-faint">
         <span>BarSafe · Togo</span>
+        <Link to="/mentions-legales" className="hover:text-ink">Mentions légales et CGU</Link>
         <Link to="/confidentialite" className="hover:text-ink">Confidentialité</Link>
         <Link to="/confidentialite#cookies" className="hover:text-ink">Cookies</Link>
         {!session && <Link to="/connexion" className="hover:text-ink">Se connecter</Link>}
