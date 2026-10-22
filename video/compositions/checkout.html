@@ -1,0 +1,95 @@
+<template>
+  <style>
+  #root { position: absolute; inset: 0; overflow: hidden; background: #151210; color: #F4ECE0; font-family: 'Outfit', sans-serif; }
+  .stage { position: absolute; inset: 0; background: radial-gradient(120% 60% at 80% 0%, rgba(224,163,62,0.16), transparent 60%), #151210; }
+  .cap { position: absolute; left: 90px; right: 90px; top: 200px; }
+  .step { font-weight: 600; font-size: 30px; letter-spacing: 0.2em; text-transform: uppercase; color: #E0A33E; }
+  .title { font-family: 'Playfair Display'; font-weight: 600; font-size: 80px; line-height: 1.04; letter-spacing: -0.01em; margin-top: 16px; color: #F4ECE0; }
+  .title .w { display: inline-block; margin-right: 0.22em; }
+  .title em { color: #E0A33E; font-style: italic; }
+  .phone { position: absolute; left: 300px; top: 480px; width: 480px; height: 880px; border-radius: 66px; background: #0B0907; padding: 13px;
+           box-shadow: 0 60px 120px -40px rgba(0,0,0,0.9), inset 0 0 0 2px #2B241D; }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 54px; overflow: hidden; background: #FAF4EA; color: #1A1512; }
+  .notch { position: absolute; top: 12px; left: 50%; width: 120px; height: 32px; margin-left: -60px; border-radius: 20px; background: #0B0907; z-index: 5; }
+  .app-top { display: flex; justify-content: space-between; align-items: center; padding: 66px 24px 20px; }
+  .bar-name { font-family: 'Playfair Display'; font-weight: 700; font-size: 36px; }
+  .badge-table { background: #E0A33E; color: #1A1512; font-weight: 700; font-size: 28px; padding: 8px 16px; border-radius: 16px; }
+  .item { display: flex; gap: 16px; align-items: center; margin: 0 18px 14px; background: #FFFDF9; border-radius: 26px; padding: 12px;
+          box-shadow: 0 10px 24px -16px rgba(26,21,18,0.35); }
+  .item img { width: 112px; height: 112px; border-radius: 20px; object-fit: cover; flex-shrink: 0; }
+  .item .name { font-weight: 600; font-size: 28px; line-height: 1.15; }
+  .item .price { font-family: 'Playfair Display'; font-weight: 700; font-size: 30px; color: #A66A16; margin-top: 6px; }
+  .add { position: relative; margin-left: auto; width: 60px; height: 60px; border-radius: 18px; background: rgba(224,163,62,0.2); color: #A66A16;
+         font-size: 36px; font-weight: 700; flex-shrink: 0; overflow: hidden; }
+  .add .fill { position: absolute; inset: 0; background: #E0A33E; opacity: 0; }
+  .add .v { position: absolute; inset: 0; display: grid; place-items: center; }
+  .add .q { color: #1A1512; font-size: 30px; opacity: 0; }
+  .stack { position: relative; display: block; }
+  .stack > span { position: absolute; left: 0; top: 0; opacity: 0; white-space: nowrap; }
+  .stack > span:first-child { position: relative; opacity: 1; }
+  .label { position: absolute; background: #FFFDF9; color: #1A1512; font-weight: 600; font-size: 32px; padding: 18px 24px; border-radius: 24px;
+           box-shadow: 0 30px 60px -24px rgba(0,0,0,0.7); white-space: nowrap; }
+  .label .ok { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: #2B7858; margin-right: 14px; vertical-align: middle; }
+
+  #co-under { position: absolute; inset: 0; background: linear-gradient(180deg, #E9DFCF, #D9CCB7); }
+  #co-sheet { position: absolute; left: 0; right: 0; bottom: 0; background: #FFFDF9; border-radius: 36px 36px 0 0; padding: 30px 24px 26px; }
+  .co-h { font-family: 'Playfair Display'; font-weight: 700; font-size: 36px; }
+  .co-lbl { font-size: 28px; font-weight: 600; color: #5C4F42; margin: 20px 0 10px; }
+  #co-name { height: 68px; border-radius: 18px; background: #F5EEE3; border: 2px solid #C98A2E; padding: 0 18px; display: flex; align-items: center; font-size: 32px; font-weight: 600; }
+  #co-caret { display: inline-block; width: 3px; height: 34px; background: #A66A16; margin-left: 3px; }
+  .co-opt { height: 60px; border-radius: 18px; border: 2px solid rgba(26,21,18,0.14); padding: 0 18px; display: flex; align-items: center; font-size: 28px; font-weight: 600; color: #5C4F42; margin-bottom: 8px; }
+  .co-total { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; font-size: 28px; font-weight: 600; }
+  .co-total b { font-family: 'Playfair Display'; font-size: 36px; }
+  #co-btn { margin-top: 16px; height: 76px; border-radius: 20px; background: #E0A33E; color: #1A1512; display: grid; place-items: center; font-size: 30px; font-weight: 700; }
+  #co-burst { position: absolute; left: 50%; bottom: 60px; width: 120px; height: 120px; margin-left: -60px; border-radius: 50%; background: #E0A33E; opacity: 0; }
+
+  </style>
+  <div id="root" data-composition-id="checkout" data-width="1080" data-height="1920">
+    <div class="stage"></div>
+    <div class="cap" id="co-cap">
+      <div class="step" id="co-step">Étape 4</div>
+      <div class="title" id="co-title"><span class="w">Votre</span><span class="w">prénom,</span><span class="w">le</span><span class="w">paiement,</span><span class="w"><em>et</em></span><span class="w"><em>validez.</em></span></div>
+    </div>
+    <div class="phone" id="co-phone"><div class="screen"><div class="notch"></div>
+      <div id="co-under"></div>
+      <div id="co-sheet">
+        <div class="co-h">Finaliser</div>
+        <div class="co-lbl">Votre prénom</div>
+        <div id="co-name"><span id="co-l1">K</span><span id="co-l2">o</span><span id="co-l3">s</span><span id="co-l4">s</span><span id="co-l5">i</span><span id="co-caret"></span></div>
+        <div class="co-lbl">Paiement</div>
+        <div class="co-opt">Espèces</div><div class="co-opt">Carte</div><div class="co-opt" id="co-mm">Mobile Money</div>
+        <div class="co-total"><span>Total</span><b>9 500 FCFA</b></div>
+        <div id="co-btn">Valider</div>
+      </div>
+      <div id="co-burst"></div>
+    </div></div>
+
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    // Title words: blur(6px) -> 0 and opacity 0 -> 1, 0.067 s apart (no translate)
+    function wordsIn(tl, sel, at) {
+      tl.fromTo(sel + ' .w', { opacity: 0, filter: 'blur(6px)' }, { opacity: 1, filter: 'blur(0px)', duration: 0.16, ease: 'power4.out', stagger: 0.067 }, at);
+    }
+    function capOut(tl, sel, at) {
+      tl.to(sel, { opacity: 0, filter: 'blur(8px)', duration: 0.2, ease: 'power3.in' }, at);
+    }
+
+    tl.fromTo('#co-step', { opacity: 0 }, { opacity: 1, duration: 0.2, ease: 'power2.out' }, 0.05);
+    wordsIn(tl, '#co-title', 0.15);
+    tl.fromTo('#co-sheet', { y: 760 }, { y: 0, duration: 0.7, ease: 'expo.out' }, 0.2);
+    // Typing "Kossi", one letter per beat
+    tl.set(['#co-l1', '#co-l2', '#co-l3', '#co-l4', '#co-l5'], { display: 'none' }, 0);
+    ['#co-l1', '#co-l2', '#co-l3', '#co-l4', '#co-l5'].forEach((l, i) => tl.set(l, { display: 'inline' }, 1.2 + i * 0.14));
+    tl.set('#co-mm', { borderColor: '#E0A33E', backgroundColor: '#FBEBD0', color: '#7A4D0F' }, 2.6);
+    tl.fromTo('#co-mm', { scale: 0.95 }, { scale: 1, duration: 0.35, ease: 'back.out(2)', immediateRender: false }, 2.6);
+    tl.set('#co-caret', { opacity: 0 }, 2.6);
+    // Validate: press, then the button floods the screen (zoom through the button)
+    tl.to('#co-btn', { scale: 0.95, duration: 0.09, ease: 'power2.in' }, 5.5);
+    tl.to('#co-btn', { scale: 1, duration: 0.15, ease: 'power2.out' }, 5.59);
+    tl.fromTo('#co-burst', { opacity: 1, scale: 0 }, { opacity: 1, scale: 16, duration: 0.6, ease: 'power3.in' }, 5.8);
+    capOut(tl, '#co-cap', 6.6);
+
+    window.__timelines["checkout"] = tl;
+  </script>
+</template>

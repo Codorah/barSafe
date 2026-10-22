@@ -22,6 +22,8 @@ const IMG = {
   interior: '/landing/interior.webp',
   plate: '/landing/plate.webp',
   stepOrder: '/landing/step-order.webp',
+  guideVideo: '/landing/guide-client.mp4',
+  guidePoster: '/landing/guide-client-poster.webp',
   stepServe: '/landing/step-serve.webp',
 };
 
@@ -92,6 +94,56 @@ const StepVisual: React.FC<{ step: typeof STEPS[number] }> = ({ step }) =>
     ? <QrTableVisual alt={step.alt} />
     : <img src={step.img} alt={step.alt} loading="lazy" className="absolute inset-0 w-full h-full object-cover" />;
 
+/** The client guide video (HyperFrames render, `video/`): muted autoplay loop, with a sound toggle.
+ *  With reduced motion it does not autoplay; the poster shows and a tap starts it. */
+const HeroVideo: React.FC = () => {
+  const ref = useRef<HTMLVideoElement>(null);
+  const reduce = useReducedMotion();
+  const [muted, setMuted] = useState(true);
+  const [playing, setPlaying] = useState(false);
+
+  const toggleSound = () => {
+    const v = ref.current;
+    if (!v) return;
+    v.muted = !v.muted;
+    setMuted(v.muted);
+    if (!v.muted && v.paused) v.play().catch(() => { /* blocked: the user can tap again */ });
+  };
+  const start = () => { ref.current?.play().catch(() => { /* autoplay blocked */ }); };
+
+  return (
+    <>
+      <video
+        ref={ref}
+        className="absolute inset-0 w-full h-full object-cover"
+        src={IMG.guideVideo}
+        poster={IMG.guidePoster}
+        autoPlay={!reduce}
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-label="Vidéo : comment commander avec BarSafe, du scan du QR code au paiement"
+        onPlay={() => setPlaying(true)}
+        onPause={() => setPlaying(false)}
+      />
+      {!playing && (
+        <button onClick={start} className="absolute inset-0 grid place-items-center bg-black/20" aria-label="Lancer la vidéo">
+          <span className="w-16 h-16 rounded-full bg-accent text-onAccent grid place-items-center text-xl shadow-lift"><i className="fa-solid fa-play ml-1" aria-hidden="true"></i></span>
+        </button>
+      )}
+      <button
+        onClick={toggleSound}
+        className="absolute bottom-4 right-4 w-11 h-11 rounded-full bg-black/55 text-white grid place-items-center backdrop-blur-sm hover:bg-black/70 transition-colors"
+        aria-label={muted ? 'Activer le son' : 'Couper le son'}
+        aria-pressed={!muted}
+      >
+        <i className={`fa-solid ${muted ? 'fa-volume-xmark' : 'fa-volume-high'}`} aria-hidden="true"></i>
+      </button>
+    </>
+  );
+};
+
 const Reveal: React.FC<{ children: React.ReactNode; delay?: number; className?: string }> = ({ children, delay = 0, className }) => (
   <motion.div
     className={className}
@@ -120,12 +172,6 @@ const Landing: React.FC<LandingProps> = ({ onStart }) => {
       mm.add('(prefers-reduced-motion: no-preference)', () => {
         // Ticker: seamless infinite loop (content is duplicated in the DOM)
         gsap.to('[data-ticker]', { xPercent: -50, duration: 38, ease: 'none', repeat: -1 });
-
-        // Hero photo parallax
-        gsap.to('[data-hero-img]', {
-          yPercent: 12, scale: 1.08, ease: 'none',
-          scrollTrigger: { trigger: '[data-hero]', start: 'top top', end: 'bottom top', scrub: true },
-        });
 
         // Role cards: images drift inside their frames
         gsap.utils.toArray<HTMLElement>('[data-drift]').forEach(el => {
@@ -275,66 +321,55 @@ const Landing: React.FC<LandingProps> = ({ onStart }) => {
             </motion.ul>
           </div>
 
-          {/* Visual collage */}
-          <div className="lg:col-span-6 xl:col-span-6 relative">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.94, rotate: 1.5 }}
-              animate={{ opacity: 1, scale: 1, rotate: 0 }}
-              transition={{ duration: 1.1, ease: EASE, delay: 0.2 }}
-              className="relative ml-auto w-full max-w-[34rem] aspect-[4/4.6] rounded-[2.5rem] overflow-hidden shadow-lift border border-line/10"
-            >
-              <img data-hero-img src={IMG.hero} alt="Comptoir de bar éclairé de lumières chaudes" className="absolute inset-0 w-full h-full object-cover origin-top" />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/55 via-transparent to-transparent" aria-hidden="true" />
-              <div className="absolute bottom-5 left-5 right-5 flex items-center justify-between text-[#F4ECE0]">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] opacity-80">Service du soir</span>
-                <span className="inline-flex items-center gap-2 text-xs font-semibold"><span className="pulse-dot !bg-[#6AC49A]" aria-hidden="true"></span> En direct</span>
-              </div>
-            </motion.div>
-
-            {/* Floating UI: incoming order */}
-            <motion.div
-              initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.9, ease: EASE, delay: 1.0 }}
-              className="absolute left-0 sm:-left-4 lg:-left-10 top-10 sm:top-14 w-[15.5rem]"
-            >
+          {/* Guide video, with the platform's two sides (service, caisse) next to it on large screens */}
+          <div className="lg:col-span-6 xl:col-span-6 flex justify-center lg:justify-end">
+            <div className="relative w-full max-w-[22rem] lg:mr-6 xl:mr-12">
               <motion.div
-                animate={reduce ? undefined : { y: [0, -8, 0] }}
-                transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-                className="card !rounded-2xl p-3.5 flex items-center gap-3"
+                initial={{ opacity: 0, scale: 0.94, rotate: 1.5 }}
+                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                transition={{ duration: 1.1, ease: EASE, delay: 0.2 }}
+                className="relative w-full aspect-[9/16] rounded-[2.5rem] overflow-hidden shadow-lift border border-line/10 bg-[#151210]"
               >
-                <span className="w-10 h-10 rounded-xl bg-accent/16 text-accentStrong grid place-items-center shrink-0"><i className="fa-solid fa-receipt" aria-hidden="true"></i></span>
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold text-ink truncate">Nouvelle commande</span>
-                  <span className="block text-xs text-muted truncate">Table 4 · 2 bières, 1 brochette</span>
-                </span>
+                <HeroVideo />
               </motion.div>
-            </motion.div>
 
-            {/* Floating UI: payment validated */}
-            <motion.div
-              initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.9, ease: EASE, delay: 1.25 }}
-              className="absolute right-2 sm:right-6 -bottom-6 w-[14.5rem]"
-            >
+              {/* Floating UI: incoming order (beside the video, never over it) */}
               <motion.div
-                animate={reduce ? undefined : { y: [0, 8, 0] }}
-                transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 0.6 }}
-                className="card !rounded-2xl p-4"
+                initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.9, ease: EASE, delay: 1.0 }}
+                className="hidden lg:block absolute right-full mr-6 top-24 w-[15.5rem]"
               >
-                <div className="flex items-center justify-between">
-                  <span className="eyebrow">Paiement validé</span>
-                  <span className="badge badge-positive"><i className="fa-solid fa-check" aria-hidden="true"></i></span>
-                </div>
-                <p className="font-display text-2xl font-semibold text-ink mt-1.5 tabnum">7 500 <span className="text-xs font-sans text-muted">FCFA</span></p>
-                <p className="text-xs text-muted mt-1 flex items-center gap-1.5"><i className="fa-solid fa-mobile-screen-button" aria-hidden="true"></i> Mobile Money · stock mis à jour</p>
+                <motion.div
+                  animate={reduce ? undefined : { y: [0, -8, 0] }}
+                  transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+                  className="card !rounded-2xl p-3.5 flex items-center gap-3"
+                >
+                  <span className="w-10 h-10 rounded-xl bg-accent/16 text-accentStrong grid place-items-center shrink-0"><i className="fa-solid fa-receipt" aria-hidden="true"></i></span>
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-ink truncate">Nouvelle commande</span>
+                    <span className="block text-xs text-muted truncate">Table 4 · 2 bières, 1 brochette</span>
+                  </span>
+                </motion.div>
               </motion.div>
-            </motion.div>
 
-            {/* Floating detail photo */}
-            <motion.div
-              initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 1, ease: EASE, delay: 1.4 }}
-              className="hidden sm:block absolute -left-2 lg:-left-16 bottom-16 w-32 h-40 rounded-3xl overflow-hidden shadow-lift border-4 border-bg"
-            >
-              <img src={IMG.pour} alt="" aria-hidden="true" className="w-full h-full object-cover" />
-            </motion.div>
+              {/* Floating UI: payment validated */}
+              <motion.div
+                initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }} transition={{ duration: 0.9, ease: EASE, delay: 1.25 }}
+                className="hidden lg:block absolute right-full mr-6 bottom-24 w-[14.5rem]"
+              >
+                <motion.div
+                  animate={reduce ? undefined : { y: [0, 8, 0] }}
+                  transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut', delay: 0.6 }}
+                  className="card !rounded-2xl p-4"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="eyebrow">Paiement validé</span>
+                    <span className="badge badge-positive"><i className="fa-solid fa-check" aria-hidden="true"></i></span>
+                  </div>
+                  <p className="font-display text-2xl font-semibold text-ink mt-1.5 tabnum">7 500 <span className="text-xs font-sans text-muted">FCFA</span></p>
+                  <p className="text-xs text-muted mt-1 flex items-center gap-1.5"><i className="fa-solid fa-mobile-screen-button" aria-hidden="true"></i> Mobile Money · stock mis à jour</p>
+                </motion.div>
+              </motion.div>
+            </div>
           </div>
         </div>
       </section>

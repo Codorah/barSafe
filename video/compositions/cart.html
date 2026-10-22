@@ -1,0 +1,90 @@
+<template>
+  <style>
+  #root { position: absolute; inset: 0; overflow: hidden; background: #151210; color: #F4ECE0; font-family: 'Outfit', sans-serif; }
+  .stage { position: absolute; inset: 0; background: radial-gradient(120% 60% at 80% 0%, rgba(224,163,62,0.16), transparent 60%), #151210; }
+  .cap { position: absolute; left: 90px; right: 90px; top: 200px; }
+  .step { font-weight: 600; font-size: 30px; letter-spacing: 0.2em; text-transform: uppercase; color: #E0A33E; }
+  .title { font-family: 'Playfair Display'; font-weight: 600; font-size: 80px; line-height: 1.04; letter-spacing: -0.01em; margin-top: 16px; color: #F4ECE0; }
+  .title .w { display: inline-block; margin-right: 0.22em; }
+  .title em { color: #E0A33E; font-style: italic; }
+  .phone { position: absolute; left: 300px; top: 480px; width: 480px; height: 880px; border-radius: 66px; background: #0B0907; padding: 13px;
+           box-shadow: 0 60px 120px -40px rgba(0,0,0,0.9), inset 0 0 0 2px #2B241D; }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 54px; overflow: hidden; background: #FAF4EA; color: #1A1512; }
+  .notch { position: absolute; top: 12px; left: 50%; width: 120px; height: 32px; margin-left: -60px; border-radius: 20px; background: #0B0907; z-index: 5; }
+  .app-top { display: flex; justify-content: space-between; align-items: center; padding: 66px 24px 20px; }
+  .bar-name { font-family: 'Playfair Display'; font-weight: 700; font-size: 36px; }
+  .badge-table { background: #E0A33E; color: #1A1512; font-weight: 700; font-size: 28px; padding: 8px 16px; border-radius: 16px; }
+  .item { display: flex; gap: 16px; align-items: center; margin: 0 18px 14px; background: #FFFDF9; border-radius: 26px; padding: 12px;
+          box-shadow: 0 10px 24px -16px rgba(26,21,18,0.35); }
+  .item img { width: 112px; height: 112px; border-radius: 20px; object-fit: cover; flex-shrink: 0; }
+  .item .name { font-weight: 600; font-size: 28px; line-height: 1.15; }
+  .item .price { font-family: 'Playfair Display'; font-weight: 700; font-size: 30px; color: #A66A16; margin-top: 6px; }
+  .add { position: relative; margin-left: auto; width: 60px; height: 60px; border-radius: 18px; background: rgba(224,163,62,0.2); color: #A66A16;
+         font-size: 36px; font-weight: 700; flex-shrink: 0; overflow: hidden; }
+  .add .fill { position: absolute; inset: 0; background: #E0A33E; opacity: 0; }
+  .add .v { position: absolute; inset: 0; display: grid; place-items: center; }
+  .add .q { color: #1A1512; font-size: 30px; opacity: 0; }
+  .stack { position: relative; display: block; }
+  .stack > span { position: absolute; left: 0; top: 0; opacity: 0; white-space: nowrap; }
+  .stack > span:first-child { position: relative; opacity: 1; }
+  .label { position: absolute; background: #FFFDF9; color: #1A1512; font-weight: 600; font-size: 32px; padding: 18px 24px; border-radius: 24px;
+           box-shadow: 0 30px 60px -24px rgba(0,0,0,0.7); white-space: nowrap; }
+  .label .ok { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: #2B7858; margin-right: 14px; vertical-align: middle; }
+
+  #cart-bar { position: absolute; left: 14px; right: 14px; bottom: 16px; background: #1A1512; color: #F4ECE0; border-radius: 28px; padding: 18px 20px;
+              display: flex; justify-content: space-between; align-items: center; }
+  #cart-count { font-size: 28px; color: rgba(244,236,224,0.78); width: 200px; height: 34px; }
+  #cart-total { font-family: 'Playfair Display'; font-weight: 700; font-size: 36px; width: 240px; height: 44px; margin-top: 2px; }
+  #cart-btn { width: 72px; height: 72px; border-radius: 22px; background: #E0A33E; display: grid; place-items: center; }
+
+  </style>
+  <div id="root" data-composition-id="cart" data-width="1080" data-height="1920">
+    <div class="stage"></div>
+    <div class="cap" id="cart-cap">
+      <div class="step" id="cart-step">Étape 3</div>
+      <div class="title" id="cart-title"><span class="w">Ajoutez</span><span class="w">vos</span><span class="w"><em>boissons</em></span><span class="w"><em>et</em></span><span class="w"><em>plats.</em></span></div>
+    </div>
+    <div class="phone" id="cart-phone"><div class="screen"><div class="notch"></div>
+          <div class="app-top" id="cart-top"><span class="bar-name">Le Maquis</span><span class="badge-table" id="cart-badge">Table 4</span></div>
+          <div class="item" id="cart-i1"><img src="assets/cocktails.webp" alt=""><div><div class="name">Cocktail maison</div><div class="price">3 500 F</div></div><div class="add" id="cart-a1"><span class="fill" id="cart-a1-fill"></span><span class="v" id="cart-a1-plus">+</span><span class="v q" id="cart-a1-q1">1</span><span class="v q" id="cart-a1-q2">2</span></div></div>
+          <div class="item" id="cart-i2"><img src="assets/pour.webp" alt=""><div><div class="name">Whisky glace</div><div class="price">4 000 F</div></div><div class="add" id="cart-a2"><span class="fill" id="cart-a2-fill"></span><span class="v" id="cart-a2-plus">+</span><span class="v q" id="cart-a2-q1">1</span><span class="v q" id="cart-a2-q2">2</span></div></div>
+          <div class="item" id="cart-i3"><img src="assets/plate.webp" alt=""><div><div class="name">Brochettes</div><div class="price">2 500 F</div></div><div class="add" id="cart-a3"><span class="fill" id="cart-a3-fill"></span><span class="v" id="cart-a3-plus">+</span><span class="v q" id="cart-a3-q1">1</span><span class="v q" id="cart-a3-q2">2</span></div></div>
+      <div id="cart-bar"><div><div id="cart-count" class="stack"><span id="cart-c1">1 article</span><span id="cart-c2">2 articles</span><span id="cart-c3">3 articles</span></div><div id="cart-total" class="stack"><span id="cart-t1">3 500 FCFA</span><span id="cart-t2">6 000 FCFA</span><span id="cart-t3">9 500 FCFA</span></div></div><div id="cart-btn"><svg width="34" height="34" viewBox="0 0 24 24"><path d="M5 12h12M12 6l6 6-6 6" stroke="#1A1512" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></div></div>
+    </div></div>
+
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    // Title words: blur(6px) -> 0 and opacity 0 -> 1, 0.067 s apart (no translate)
+    function wordsIn(tl, sel, at) {
+      tl.fromTo(sel + ' .w', { opacity: 0, filter: 'blur(6px)' }, { opacity: 1, filter: 'blur(0px)', duration: 0.16, ease: 'power4.out', stagger: 0.067 }, at);
+    }
+    function capOut(tl, sel, at) {
+      tl.to(sel, { opacity: 0, filter: 'blur(8px)', duration: 0.2, ease: 'power3.in' }, at);
+    }
+
+    tl.fromTo('#cart-step', { opacity: 0 }, { opacity: 1, duration: 0.2, ease: 'power2.out' }, 0.05);
+    wordsIn(tl, '#cart-title', 0.15);
+    // A tap presses the button, then swaps the visible value (stacked spans, seek-safe)
+    function tap(btn, at, hide, show) {
+      tl.to(btn, { scale: 0.86, duration: 0.08, ease: 'power2.in' }, at);
+      tl.set(btn + '-fill', { opacity: 1 }, at + 0.08);
+      tl.set(hide, { opacity: 0 }, at + 0.08);
+      tl.set(show, { opacity: 1 }, at + 0.08);
+      tl.to(btn, { scale: 1, duration: 0.3, ease: 'back.out(2)' }, at + 0.08);
+    }
+    function swap(hide, show, at) { tl.set(hide, { opacity: 0 }, at); tl.set(show, { opacity: 1 }, at); }
+    tap('#cart-a1', 1.0, '#cart-a1-plus', '#cart-a1-q1');
+    tl.fromTo('#cart-bar', { y: 160, opacity: 0 }, { y: 0, opacity: 1, duration: 0.55, ease: 'expo.out' }, 1.1);
+    tap('#cart-a3', 2.6, '#cart-a3-plus', '#cart-a3-q1');
+    swap('#cart-c1', '#cart-c2', 2.7); swap('#cart-t1', '#cart-t2', 2.7);
+    tap('#cart-a1', 4.0, '#cart-a1-q1', '#cart-a1-q2');
+    swap('#cart-c2', '#cart-c3', 4.1); swap('#cart-t2', '#cart-t3', 4.1);
+    tl.fromTo('#cart-total', { scale: 1.12 }, { scale: 1, duration: 0.35, ease: 'power3.out', immediateRender: false }, 4.1);
+    tl.to('#cart-btn', { scale: 0.9, duration: 0.08 }, 5.9);
+    tl.to('#cart-btn', { scale: 1, duration: 0.2, ease: 'power2.out' }, 5.98);
+    capOut(tl, '#cart-cap', 6.2);
+
+    window.__timelines["cart"] = tl;
+  </script>
+</template>

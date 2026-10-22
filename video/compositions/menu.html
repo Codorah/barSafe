@@ -1,0 +1,76 @@
+<template>
+  <style>
+  #root { position: absolute; inset: 0; overflow: hidden; background: #151210; color: #F4ECE0; font-family: 'Outfit', sans-serif; }
+  .stage { position: absolute; inset: 0; background: radial-gradient(120% 60% at 80% 0%, rgba(224,163,62,0.16), transparent 60%), #151210; }
+  .cap { position: absolute; left: 90px; right: 90px; top: 200px; }
+  .step { font-weight: 600; font-size: 30px; letter-spacing: 0.2em; text-transform: uppercase; color: #E0A33E; }
+  .title { font-family: 'Playfair Display'; font-weight: 600; font-size: 80px; line-height: 1.04; letter-spacing: -0.01em; margin-top: 16px; color: #F4ECE0; }
+  .title .w { display: inline-block; margin-right: 0.22em; }
+  .title em { color: #E0A33E; font-style: italic; }
+  .phone { position: absolute; left: 300px; top: 480px; width: 480px; height: 880px; border-radius: 66px; background: #0B0907; padding: 13px;
+           box-shadow: 0 60px 120px -40px rgba(0,0,0,0.9), inset 0 0 0 2px #2B241D; }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 54px; overflow: hidden; background: #FAF4EA; color: #1A1512; }
+  .notch { position: absolute; top: 12px; left: 50%; width: 120px; height: 32px; margin-left: -60px; border-radius: 20px; background: #0B0907; z-index: 5; }
+  .app-top { display: flex; justify-content: space-between; align-items: center; padding: 66px 24px 20px; }
+  .bar-name { font-family: 'Playfair Display'; font-weight: 700; font-size: 36px; }
+  .badge-table { background: #E0A33E; color: #1A1512; font-weight: 700; font-size: 28px; padding: 8px 16px; border-radius: 16px; }
+  .item { display: flex; gap: 16px; align-items: center; margin: 0 18px 14px; background: #FFFDF9; border-radius: 26px; padding: 12px;
+          box-shadow: 0 10px 24px -16px rgba(26,21,18,0.35); }
+  .item img { width: 112px; height: 112px; border-radius: 20px; object-fit: cover; flex-shrink: 0; }
+  .item .name { font-weight: 600; font-size: 28px; line-height: 1.15; }
+  .item .price { font-family: 'Playfair Display'; font-weight: 700; font-size: 30px; color: #A66A16; margin-top: 6px; }
+  .add { position: relative; margin-left: auto; width: 60px; height: 60px; border-radius: 18px; background: rgba(224,163,62,0.2); color: #A66A16;
+         font-size: 36px; font-weight: 700; flex-shrink: 0; overflow: hidden; }
+  .add .fill { position: absolute; inset: 0; background: #E0A33E; opacity: 0; }
+  .add .v { position: absolute; inset: 0; display: grid; place-items: center; }
+  .add .q { color: #1A1512; font-size: 30px; opacity: 0; }
+  .stack { position: relative; display: block; }
+  .stack > span { position: absolute; left: 0; top: 0; opacity: 0; white-space: nowrap; }
+  .stack > span:first-child { position: relative; opacity: 1; }
+  .label { position: absolute; background: #FFFDF9; color: #1A1512; font-weight: 600; font-size: 32px; padding: 18px 24px; border-radius: 24px;
+           box-shadow: 0 30px 60px -24px rgba(0,0,0,0.7); white-space: nowrap; }
+  .label .ok { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: #2B7858; margin-right: 14px; vertical-align: middle; }
+
+  #menu-label { left: 806px; top: 560px; }
+
+  </style>
+  <div id="root" data-composition-id="menu" data-width="1080" data-height="1920">
+    <div class="stage"></div>
+    <div class="cap" id="menu-cap">
+      <div class="step" id="menu-step">Étape 2</div>
+      <div class="title" id="menu-title"><span class="w">Le</span><span class="w">menu</span><span class="w">s’ouvre,</span><span class="w"><em>table</em></span><span class="w"><em>déjà</em></span><span class="w"><em>indiquée.</em></span></div>
+    </div>
+    <div class="phone" id="menu-phone"><div class="screen"><div class="notch"></div>
+          <div class="app-top" id="menu-top"><span class="bar-name">Le Maquis</span><span class="badge-table" id="menu-badge">Table 4</span></div>
+          <div class="item" id="menu-i1"><img src="assets/cocktails.webp" alt=""><div><div class="name">Cocktail maison</div><div class="price">3 500 F</div></div><div class="add" id="menu-a1"><span class="fill" id="menu-a1-fill"></span><span class="v" id="menu-a1-plus">+</span><span class="v q" id="menu-a1-q1">1</span><span class="v q" id="menu-a1-q2">2</span></div></div>
+          <div class="item" id="menu-i2"><img src="assets/pour.webp" alt=""><div><div class="name">Whisky glace</div><div class="price">4 000 F</div></div><div class="add" id="menu-a2"><span class="fill" id="menu-a2-fill"></span><span class="v" id="menu-a2-plus">+</span><span class="v q" id="menu-a2-q1">1</span><span class="v q" id="menu-a2-q2">2</span></div></div>
+          <div class="item" id="menu-i3"><img src="assets/plate.webp" alt=""><div><div class="name">Brochettes</div><div class="price">2 500 F</div></div><div class="add" id="menu-a3"><span class="fill" id="menu-a3-fill"></span><span class="v" id="menu-a3-plus">+</span><span class="v q" id="menu-a3-q1">1</span><span class="v q" id="menu-a3-q2">2</span></div></div>
+    </div></div>
+    <div class="label" id="menu-label" data-layout-allow-overlap data-layout-allow-occlusion><span class="ok"></span>Table 4</div>
+
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    // Title words: blur(6px) -> 0 and opacity 0 -> 1, 0.067 s apart (no translate)
+    function wordsIn(tl, sel, at) {
+      tl.fromTo(sel + ' .w', { opacity: 0, filter: 'blur(6px)' }, { opacity: 1, filter: 'blur(0px)', duration: 0.16, ease: 'power4.out', stagger: 0.067 }, at);
+    }
+    function capOut(tl, sel, at) {
+      tl.to(sel, { opacity: 0, filter: 'blur(8px)', duration: 0.2, ease: 'power3.in' }, at);
+    }
+
+    tl.fromTo('#menu-step', { opacity: 0 }, { opacity: 1, duration: 0.2, ease: 'power2.out' }, 0.05);
+    wordsIn(tl, '#menu-title', 0.15);
+    // Content builds out of the scan flash
+    tl.fromTo('#menu-top', { opacity: 0, y: -20 }, { opacity: 1, y: 0, duration: 0.5, ease: 'expo.out' }, 0.1);
+    tl.fromTo(['#menu-i1', '#menu-i2', '#menu-i3'], { opacity: 0, y: 40 }, { opacity: 1, y: 0, duration: 0.6, ease: 'expo.out', stagger: 0.08 }, 0.35);
+    // The table badge: emphasised, then named outside the phone
+    tl.to('#menu-badge', { scale: 1.14, duration: 0.25, ease: 'power2.out' }, 1.9);
+    tl.to('#menu-badge', { scale: 1, duration: 0.35, ease: 'power2.inOut' }, 2.15);
+    tl.fromTo('#menu-label', { opacity: 0, x: -30 }, { opacity: 1, x: 0, duration: 0.5, ease: 'expo.out' }, 2.15);
+    tl.to('#menu-label', { opacity: 0, duration: 0.2, ease: 'power2.in' }, 5.6);
+    capOut(tl, '#menu-cap', 6.2);
+
+    window.__timelines["menu"] = tl;
+  </script>
+</template>

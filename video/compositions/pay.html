@@ -1,0 +1,82 @@
+<template>
+  <style>
+  #root { position: absolute; inset: 0; overflow: hidden; background: #151210; color: #F4ECE0; font-family: 'Outfit', sans-serif; }
+  .stage { position: absolute; inset: 0; background: radial-gradient(120% 60% at 80% 0%, rgba(224,163,62,0.16), transparent 60%), #151210; }
+  .cap { position: absolute; left: 90px; right: 90px; top: 200px; }
+  .step { font-weight: 600; font-size: 30px; letter-spacing: 0.2em; text-transform: uppercase; color: #E0A33E; }
+  .title { font-family: 'Playfair Display'; font-weight: 600; font-size: 80px; line-height: 1.04; letter-spacing: -0.01em; margin-top: 16px; color: #F4ECE0; }
+  .title .w { display: inline-block; margin-right: 0.22em; }
+  .title em { color: #E0A33E; font-style: italic; }
+  .phone { position: absolute; left: 300px; top: 480px; width: 480px; height: 880px; border-radius: 66px; background: #0B0907; padding: 13px;
+           box-shadow: 0 60px 120px -40px rgba(0,0,0,0.9), inset 0 0 0 2px #2B241D; }
+  .screen { position: relative; width: 100%; height: 100%; border-radius: 54px; overflow: hidden; background: #FAF4EA; color: #1A1512; }
+  .notch { position: absolute; top: 12px; left: 50%; width: 120px; height: 32px; margin-left: -60px; border-radius: 20px; background: #0B0907; z-index: 5; }
+  .app-top { display: flex; justify-content: space-between; align-items: center; padding: 66px 24px 20px; }
+  .bar-name { font-family: 'Playfair Display'; font-weight: 700; font-size: 36px; }
+  .badge-table { background: #E0A33E; color: #1A1512; font-weight: 700; font-size: 28px; padding: 8px 16px; border-radius: 16px; }
+  .item { display: flex; gap: 16px; align-items: center; margin: 0 18px 14px; background: #FFFDF9; border-radius: 26px; padding: 12px;
+          box-shadow: 0 10px 24px -16px rgba(26,21,18,0.35); }
+  .item img { width: 112px; height: 112px; border-radius: 20px; object-fit: cover; flex-shrink: 0; }
+  .item .name { font-weight: 600; font-size: 28px; line-height: 1.15; }
+  .item .price { font-family: 'Playfair Display'; font-weight: 700; font-size: 30px; color: #A66A16; margin-top: 6px; }
+  .add { position: relative; margin-left: auto; width: 60px; height: 60px; border-radius: 18px; background: rgba(224,163,62,0.2); color: #A66A16;
+         font-size: 36px; font-weight: 700; flex-shrink: 0; overflow: hidden; }
+  .add .fill { position: absolute; inset: 0; background: #E0A33E; opacity: 0; }
+  .add .v { position: absolute; inset: 0; display: grid; place-items: center; }
+  .add .q { color: #1A1512; font-size: 30px; opacity: 0; }
+  .stack { position: relative; display: block; }
+  .stack > span { position: absolute; left: 0; top: 0; opacity: 0; white-space: nowrap; }
+  .stack > span:first-child { position: relative; opacity: 1; }
+  .label { position: absolute; background: #FFFDF9; color: #1A1512; font-weight: 600; font-size: 32px; padding: 18px 24px; border-radius: 24px;
+           box-shadow: 0 30px 60px -24px rgba(0,0,0,0.7); white-space: nowrap; }
+  .label .ok { display: inline-block; width: 16px; height: 16px; border-radius: 50%; background: #2B7858; margin-right: 14px; vertical-align: middle; }
+
+  #pay-card { position: absolute; left: 18px; right: 18px; top: 72px; background: #FFFDF9; border-radius: 30px; padding: 26px 24px; box-shadow: 0 16px 34px -20px rgba(26,21,18,0.4); }
+  .pay-k { font-size: 28px; font-weight: 600; color: #8A5A13; }
+  .pay-total { font-family: 'Playfair Display'; font-weight: 700; font-size: 56px; margin-top: 8px; }
+  #pay-badge { display: inline-flex; align-items: center; gap: 10px; margin-top: 16px; padding: 12px 20px; border-radius: 16px; background: #DCEFE5; color: #1D5A41; font-size: 32px; font-weight: 700; }
+  #pay-photo { position: absolute; left: 18px; right: 18px; top: 400px; height: 380px; border-radius: 26px; overflow: hidden; }
+  #pay-photo img { width: 100%; height: 100%; object-fit: cover; }
+  .methods { position: absolute; left: 90px; right: 90px; top: 360px; justify-content: flex-start; display: flex; gap: 16px; }
+  .m { padding: 16px 22px; border-radius: 20px; background: rgba(244,236,224,0.08); border: 1.5px solid rgba(244,236,224,0.2); font-size: 32px; font-weight: 600; color: #F4ECE0; white-space: nowrap; }
+
+  </style>
+  <div id="root" data-composition-id="pay" data-width="1080" data-height="1920">
+    <div class="stage"></div>
+    <div class="cap" id="pay-cap">
+      <div class="step" id="pay-step">Étape 6</div>
+      <div class="title" id="pay-title"><span class="w">Réglez</span><span class="w"><em>à</em></span><span class="w"><em>la</em></span><span class="w"><em>caisse.</em></span></div>
+    </div>
+    <div class="phone" id="pay-phone"><div class="screen"><div class="notch"></div>
+      <div id="pay-card">
+        <div class="pay-k">Table 4</div>
+        <div class="pay-total">9 500 FCFA</div>
+        <div id="pay-badge">✓ Payée</div>
+      </div>
+      <div id="pay-photo"><img src="assets/payment.webp" alt=""></div>
+    </div></div>
+    <div class="methods"><div class="m" id="pay-m1">Espèces</div><div class="m" id="pay-m2">Carte</div><div class="m" id="pay-m3">Mobile Money</div></div>
+
+  </div>
+  <script>
+    const tl = gsap.timeline({ paused: true });
+    // Title words: blur(6px) -> 0 and opacity 0 -> 1, 0.067 s apart (no translate)
+    function wordsIn(tl, sel, at) {
+      tl.fromTo(sel + ' .w', { opacity: 0, filter: 'blur(6px)' }, { opacity: 1, filter: 'blur(0px)', duration: 0.16, ease: 'power4.out', stagger: 0.067 }, at);
+    }
+    function capOut(tl, sel, at) {
+      tl.to(sel, { opacity: 0, filter: 'blur(8px)', duration: 0.2, ease: 'power3.in' }, at);
+    }
+
+    tl.fromTo('#pay-step', { opacity: 0 }, { opacity: 1, duration: 0.2, ease: 'power2.out' }, 0.05);
+    wordsIn(tl, '#pay-title', 0.15);
+    tl.fromTo('#pay-card', { opacity: 0, y: 30 }, { opacity: 1, y: 0, duration: 0.5, ease: 'expo.out' }, 0.1);
+    tl.fromTo('#pay-photo', { opacity: 0, scale: 1.06 }, { opacity: 1, scale: 1, duration: 0.8, ease: 'expo.out' }, 0.3);
+    tl.fromTo(['#pay-m1', '#pay-m2', '#pay-m3'], { opacity: 0, y: 24 }, { opacity: 1, y: 0, duration: 0.5, ease: 'expo.out', stagger: 0.07 }, 1.0);
+    tl.fromTo('#pay-badge', { opacity: 0, scale: 0.7 }, { opacity: 1, scale: 1, duration: 0.45, ease: 'back.out(1.8)' }, 3.2);
+    tl.to(['#pay-m1', '#pay-m2', '#pay-m3'], { opacity: 0, duration: 0.2 }, 5.6);
+    capOut(tl, '#pay-cap', 5.75);
+
+    window.__timelines["pay"] = tl;
+  </script>
+</template>
