@@ -421,9 +421,7 @@ textarea.field { resize: vertical; min-height: 7rem; }
   align-items: center;
   justify-content: center;
   gap: 1.15rem;
-  transition: opacity 0.45s ease;
 }
-.splash-out { opacity: 0; pointer-events: none; }
 .splash-mark {
   width: 5rem; height: 5rem;
   border-radius: 1.5rem;
@@ -458,9 +456,32 @@ textarea.field { resize: vertical; min-height: 7rem; }
   display: block; height: 100%; width: 0;
   background: rgb(var(--accent));
   border-radius: 999px;
-  animation: splashBar 1.3s ease 0.15s forwards;
 }
-@keyframes splashBar { to { width: 100%; } }
+.splash-tip {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: rgb(var(--faint));
+  animation: fadeIn 0.6s ease 0.6s both;
+}
+
+/* Boot screen: static HTML inside #root, visible before the JS bundle runs */
+.boot {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.15rem;
+  background: rgb(var(--bg));
+}
+.boot .splash-mark { animation: bootPulse 1.6s ease-in-out infinite; }
+.boot-bar {
+  width: 8rem; height: 3px; border-radius: 999px; overflow: hidden;
+  background: rgb(var(--line) / 0.12);
+}
+.boot-bar span {
+  display: block; height: 100%; width: 40%;
+  border-radius: 999px; background: rgb(var(--accent));
+  animation: bootSlide 1.2s ease-in-out infinite;
+}
+@keyframes bootPulse { 50% { transform: scale(0.93); } }
+@keyframes bootSlide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }

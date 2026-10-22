@@ -17,15 +17,18 @@
     <script>
       (function () {
         try {
+          // Light by default; follow the OS only if the user chose "Système" in Settings.
           var t = localStorage.getItem('theme');
-          if (t !== 'light' && t !== 'dark') {
-            t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+          if (t === 'system') {
+            t = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          } else if (t !== 'dark') {
+            t = 'light';
           }
           document.documentElement.classList.toggle('dark', t === 'dark');
           document.documentElement.style.colorScheme = t;
           document.documentElement.style.background = t === 'dark' ? '#151210' : '#FAF4EA';
         } catch (e) {
-          document.documentElement.classList.add('dark');
+          document.documentElement.style.background = '#FAF4EA';
         }
       })();
     </script>
@@ -78,7 +81,13 @@
     <link rel="stylesheet" href="/index.css">
 </head>
 <body class="font-sans antialiased">
-    <div id="root"></div>
+    <div id="root">
+      <!-- Replaced by React on first render -->
+      <div class="boot" role="status" aria-label="Chargement de BarSafe">
+        <div class="splash-mark"><i class="fa-solid fa-martini-glass-citrus"></i></div>
+        <div class="boot-bar"><span></span></div>
+      </div>
+    </div>
     <div class="grain" aria-hidden="true"></div>
 <script type="module" src="/index.tsx"></script>
 </body>

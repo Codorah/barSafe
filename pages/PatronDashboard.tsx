@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Product, OrderStatus, Order } from '../types';
+import { Product, OrderStatus, Order, AppState } from '../types';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import QRCode from 'react-qr-code';
 import { useTheme } from '../theme';
@@ -8,11 +8,12 @@ interface PatronDashboardProps {
   state: {
     products: Product[];
     orders: Order[];
-    currentUser: any;
+    currentUser: AppState['currentUser'];
   };
-  onAddProduct: (product: Omit<Product, 'id'>) => void;
-  onDeleteProduct: (id: string) => void;
-  onAddStock: (productId: string, qty: number) => void;
+  /** Each resolves to true on success; failures are already reported by the app. */
+  onAddProduct: (product: Omit<Product, 'id'>) => Promise<boolean>;
+  onDeleteProduct: (id: string) => Promise<boolean>;
+  onAddStock: (productId: string, qty: number) => Promise<boolean>;
 }
 
 const CATEGORIES = ['Bière', 'Sucrerie', 'Plat', 'Autre'];
@@ -255,7 +256,7 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onAddProduct, 
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chart.grid} />
                     <XAxis dataKey="label" tick={{ fill: chart.tick, fontSize: 11 }} tickLine={false} axisLine={false} />
                     <YAxis tick={{ fill: chart.tick, fontSize: 11 }} tickLine={false} axisLine={false} />
-                    <Tooltip cursor={{ fill: chart.grid }} contentStyle={{ background: chart.tipBg, border: 'none', borderRadius: 14, color: chart.tipText }} labelStyle={{ color: chart.tipText }} formatter={(v: any) => [`${Number(v).toLocaleString()} F`, 'Ventes']} />
+                    <Tooltip cursor={{ fill: chart.grid }} contentStyle={{ background: chart.tipBg, border: 'none', borderRadius: 14, color: chart.tipText }} labelStyle={{ color: chart.tipText }} formatter={(v: unknown) => [`${Number(v).toLocaleString()} F`, 'Ventes']} />
                     <Bar dataKey="total" fill={chart.bar} radius={[8, 8, 0, 0]} maxBarSize={40} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -383,7 +384,7 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onAddProduct, 
                       <span className={`badge ${isLow(p) ? 'badge-danger' : 'badge-positive'}`}>{isLow(p) ? 'Stock faible' : 'Disponible'}</span>
                     </div>
                     <div className="flex gap-2 mt-4 pt-4 border-t border-line/8">
-                      <button className="btn btn-danger btn-sm flex-grow" onClick={() => { onDeleteProduct(p.id); pushToast('Produit supprimé', 'info'); }}>
+                      <button className="btn btn-danger btn-sm flex-grow" onClick={async () => { if (await onDeleteProduct(p.id)) pushToast('Produit supprimé', 'info'); }}>
                         <i className="fa-solid fa-trash" aria-hidden="true"></i> Supprimer
                       </button>
                     </div>
@@ -423,16 +424,15 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onAddProduct, 
             <div className="flex gap-3">
               <button onClick={() => { setShowAddStockModal(null); setStockQty(0); }} className="btn btn-ghost flex-1">Annuler</button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (stockQty <= 0 || isAddingStock) return;
                   setIsAddingStock(true);
-                  window.setTimeout(() => {
-                    onAddStock(showAddStockModal, stockQty);
-                    setShowAddStockModal(null);
-                    setStockQty(0);
-                    setIsAddingStock(false);
-                    pushToast('Stock mis à jour');
-                  }, 450);
+                  const ok = await onAddStock(showAddStockModal, stockQty);
+                  setIsAddingStock(false);
+                  if (!ok) return; // keep the modal open so the owner can retry
+                  setShowAddStockModal(null);
+                  setStockQty(0);
+                  pushToast('Stock mis à jour');
                 }}
                 className="btn btn-primary flex-1"
                 disabled={stockQty <= 0 || isAddingStock}
@@ -496,7 +496,7 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onAddProduct, 
                 Annuler
               </button>
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (!newProductName.trim() || newProductPrice <= 0 || !newProductImageUrl.trim() || isSavingProduct) return;
                   setIsSavingProduct(true);
                   const createdProduct: Omit<Product, 'id'> = {
@@ -509,14 +509,13 @@ const PatronDashboard: React.FC<PatronDashboardProps> = ({ state, onAddProduct, 
                     lowStockThreshold: newProductThreshold || 10,
                     imageUrl: newProductImageUrl.trim(),
                   };
-                  window.setTimeout(() => {
-                    onAddProduct(createdProduct);
-                    setShowAddProduct(false);
-                    setNewProductName(''); setNewProductPrice(0); setNewProductImageUrl(''); setNewProductDescription(''); setNewProductCategory('Bière'); setNewProductThreshold(10);
-                    setProductImageInputKey(prev => prev + 1);
-                    setIsSavingProduct(false);
-                    pushToast('Produit ajouté');
-                  }, 550);
+                  const ok = await onAddProduct(createdProduct);
+                  setIsSavingProduct(false);
+                  if (!ok) return; // keep the form filled so nothing is lost
+                  setShowAddProduct(false);
+                  setNewProductName(''); setNewProductPrice(0); setNewProductImageUrl(''); setNewProductDescription(''); setNewProductCategory('Bière'); setNewProductThreshold(10);
+                  setProductImageInputKey(prev => prev + 1);
+                  pushToast('Produit ajouté');
                 }}
                 className="btn btn-primary flex-1"
                 disabled={!newProductName.trim() || newProductPrice <= 0 || !newProductImageUrl.trim() || isSavingProduct}

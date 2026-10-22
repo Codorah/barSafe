@@ -1,6 +1,5 @@
 <div align="center">
-  <!-- Remplacer par un vrai screenshot de l'app si possible -->
-  <img src="https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&q=80&w=1200&h=400" alt="BarSafe Banner" style="border-radius: 20px; object-fit: cover; width: 100%; max-height: 350px;">
+  <img src="docs/screenshot-landing.jpg" alt="Page d'accueil de BarSafe" style="border-radius: 20px; width: 100%;">
   
   <h1 align="center">🍸 BarSafe Togo</h1>
   <p align="center">
@@ -25,7 +24,7 @@ Le système est divisé en plusieurs accès sécurisés selon le rôle de l'util
 - **👑 L'Espace Patron (Direction)**
   - **Tableau de bord Analytique :** Chiffre d'affaires en temps réel, alertes de stock bas, top des ventes.
   - **Gestion du Catalogue :** Ajout de produits, paramétrage des prix et gestion dynamique de l'inventaire.
-  - **Ressources Humaines :** Génération de tokens d'invitation sécurisés pour enrôler les employés (Serveurs/Caissiers).
+  - **Accès équipe :** trois codes numériques par établissement (Direction, Service, Caisse), hachés en base. Pas de compte e-mail à créer.
   - **Générateur de QR Code :** Création des QR Codes pour la numérisation des tables.
 
 - **🏃 L'Espace Serveur**
@@ -56,14 +55,37 @@ BarSafe a été pensé pour la performance, la sécurité et la maintenabilité,
 ### Backend & Cloud (BaaS)
 * **Supabase (PostgreSQL) :** Base de données relationnelle hautement performante.
 * **Row Level Security (RLS) :** Politiques de sécurité avancées garantissant l'étanchéité absolue des données entre différents établissements.
-* **Fonctions et Triggers SQL :** Automatisation côté serveur pour sécuriser les flux critiques (ex: création automatique de rôles via Token).
-* **Supabase Auth :** Gestion d'authentification robuste avec synchronisation de session.
+* **Fonctions SQL (RPC) :** toutes les écritures passent par des fonctions `SECURITY DEFINER` (`place_order`, `pay_order`, `add_stock`…) qui vérifient la session, le rôle et l'établissement.
+* **Comptes (Supabase Auth, e-mail ou Google) :** compte *établissement* (crée et gère ses bars, accès Direction sans code) ou compte *client* (historique de commandes). Les clients qui scannent un QR code n'ont besoin d'aucun compte.
+* **Données privées :** commandes et notifications ne sont lisibles que par le personnel connecté du bar ; un client QR ne relit que ses commandes, grâce au jeton de suivi secret reçu à la commande.
+* **Sessions du personnel :** connexion par code (`staff_login`), jeton de 12 h vérifié côté serveur et conservé au rechargement de la page. Limite de 10 essais par quart d'heure.
+* **Landing & animations :** Motion (entrées, micro-interactions) et GSAP ScrollTrigger (parallaxe, section épinglée, frise anti-fraude).
 
 ## 🛡️ Focus : Sécurité et Anti-Fraude
 Un des défis majeurs dans la restauration est la fraude. Ce projet intègre une approche technique défensive :
 * **Découplage des permissions :** Le serveur peut lancer la commande, mais seul le caissier la valide.
-* **Stock Verrouillé :** Le stock ne diminue *que* lorsque la commande passe au statut "PAID" (Payé), limitant le vol.
-* **RLS (Sécurité au niveau de la ligne) :** Un serveur ou un caissier ne peut lire/écrire que les données de *son propre* établissement (Bar A ne verra jamais Bar B).
+* **Stock Verrouillé :** Le stock ne diminue *que* lorsque la commande passe au statut "PAYÉ", une seule fois (double encaissement refusé).
+* **Totaux calculés en base :** le prix vient de la table `products`, jamais du téléphone du client.
+* **Écritures fermées :** la clé publique ne peut que lire ; un serveur ou un caissier n'agit que sur *son propre* établissement.
+
+## 🛠️ Installation
+
+```bash
+npm install
+cp .env.example .env.local     # renseigner VITE_SUPABASE_URL et VITE_SUPABASE_ANON_KEY (clé publishable)
+npm run dev
+```
+
+Base de données (éditeur SQL Supabase, dans l'ordre) :
+1. `schema.sql`
+2. `supabase/migrations/20261022120000_secure_rpc_sessions.sql`
+3. `supabase/migrations/20261023090000_accounts_and_private_orders.sql`
+4. `supabase/migrations/20261023120000_become_owner.sql`
+5. `supabase/tests/order_flow.sql` (vérification, tout est annulé à la fin)
+
+Qualité : `npm run typecheck`, `npm run lint`, `npm test`.
+
+<img src="docs/screenshot-steps.jpg" alt="Section Comment ça marche" style="border-radius: 16px; width: 100%;">
 
 ## 👩🏽‍💻 À Propos de la Développeuse
 
@@ -76,7 +98,7 @@ En tant que **Prompt Ingénieur** et **Développeuse Full-Stack / Intégration I
 
 📧 **Contact :** codorah@hotmail.com  
 📞 **Téléphone :** +228 71 67 25 65  
-🔗 **LinkedIn :** *[Ajoutez le lien de votre profil ici]*
+🔗 **LinkedIn :** *lien à compléter*
 
 ---
 <p align="center">

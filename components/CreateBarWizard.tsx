@@ -70,7 +70,9 @@ const CreateBarWizard: React.FC<CreateBarWizardProps> = ({ onClose, onCreate, on
 
   const codeOk = (c: string) => /^\d{4,8}$/.test(c);
   const nameValid = form.name.trim().length >= 2;
-  const codesValid = codeOk(form.codePatron) && codeOk(form.codeServeur) && codeOk(form.codeCaissier);
+  const codesFilled = codeOk(form.codePatron) && codeOk(form.codeServeur) && codeOk(form.codeCaissier);
+  const codesDistinct = new Set([form.codePatron, form.codeServeur, form.codeCaissier]).size === 3;
+  const codesValid = codesFilled && codesDistinct;
   const canContinue = step === 0 ? nameValid : step === 3 ? codesValid : true;
 
   const finish = async () => {
@@ -242,6 +244,12 @@ const CreateBarWizard: React.FC<CreateBarWizardProps> = ({ onClose, onCreate, on
                           </div>
                         </div>
                       ))}
+                      {codesFilled && !codesDistinct && (
+                        <p className="flex items-center gap-2 rounded-xl bg-warn/14 text-warn px-3.5 py-2.5 text-sm font-medium" role="alert">
+                          <i className="fa-solid fa-triangle-exclamation" aria-hidden="true"></i>
+                          Les trois codes doivent être différents, sinon un serveur pourrait ouvrir la caisse.
+                        </p>
+                      )}
                     </div>
                   )}
 

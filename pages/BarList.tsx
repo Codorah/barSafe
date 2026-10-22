@@ -1,19 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Establishment } from '../types';
 import { api, NewEstablishmentInput } from '../api';
 import CreateBarWizard from '../components/CreateBarWizard';
-import ThemeToggle from '../components/ThemeToggle';
+import SiteHeader from '../components/SiteHeader';
+import { useAuth } from '../lib/auth';
 
 interface BarListProps {
   establishments: Establishment[];
   loading: boolean;
   onSelect: (id: string) => void;
   onCreate: (input: NewEstablishmentInput) => Promise<string | null>;
+  /** True if the visitor may create a bar (owner account); otherwise the app redirects/explains. */
+  onRequestCreate: () => boolean;
 }
 
 const HERO_IMG = 'https://images.unsplash.com/photo-1514933651103-005eec06c04b?auto=format&fit=crop&q=80&w=1600';
 
-const BarList: React.FC<BarListProps> = ({ establishments, loading, onSelect, onCreate }) => {
+const BarList: React.FC<BarListProps> = ({ establishments, loading, onSelect, onCreate, onRequestCreate }) => {
   const [search, setSearch] = useState('');
   const [sort, setSort] = useState<'recent' | 'az'>('recent');
   const [wizard, setWizard] = useState(false);
@@ -21,10 +25,22 @@ const BarList: React.FC<BarListProps> = ({ establishments, loading, onSelect, on
 
   useEffect(() => { api.getProductIndex().then(setProductIndex); }, [establishments.length]);
 
+  const openWizard = () => { if (onRequestCreate()) setWizard(true); };
+
+  // Back from sign-up/sign-in with ?creer=1: open the wizard right away
+  const [params, setParams] = useSearchParams();
+  const { loading: authLoading } = useAuth();
+  useEffect(() => {
+    if (authLoading || params.get('creer') !== '1') return;
+    setParams({}, { replace: true });
+    openWizard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per ?creer=1 visit
+  }, [params, authLoading]);
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
     let list = establishments;
-    let foodMatches: Record<string, string[]> = {};
+    const foodMatches: Record<string, string[]> = {};
 
     if (term) {
       // establishments whose products match the term
@@ -47,18 +63,7 @@ const BarList: React.FC<BarListProps> = ({ establishments, loading, onSelect, on
 
   return (
     <div className="space-y-12 pb-16">
-      <header className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="w-11 h-11 rounded-2xl bg-accent grid place-items-center shadow-[0_8px_20px_-8px_rgb(var(--accent)/0.6)]">
-            <i className="fa-solid fa-martini-glass-citrus text-onAccent text-lg" aria-hidden="true"></i>
-          </span>
-          <span className="flex flex-col -space-y-0.5">
-            <span className="font-display text-xl font-semibold tracking-tight leading-none">BarSafe</span>
-            <span className="eyebrow text-[0.62rem]">Togo</span>
-          </span>
-        </div>
-        <ThemeToggle />
-      </header>
+      <SiteHeader />
 
       {/* Hero */}
       <section className="relative overflow-hidden rounded-[2.5rem] shadow-lift isolate">
@@ -84,7 +89,7 @@ const BarList: React.FC<BarListProps> = ({ establishments, loading, onSelect, on
                 className="field field-icon !bg-[#F4ECE0] !text-[#1A1512] !border-transparent placeholder:!text-[#0d0a08]/40"
               />
             </div>
-            <button onClick={() => setWizard(true)} className="btn btn-primary btn-lg shrink-0">
+            <button onClick={openWizard} className="btn btn-primary btn-lg shrink-0">
               <i className="fa-solid fa-plus" aria-hidden="true"></i> Créer mon bar
             </button>
           </div>
@@ -103,7 +108,7 @@ const BarList: React.FC<BarListProps> = ({ establishments, loading, onSelect, on
           {!loading && establishments.length > 0 && (
             <div className="segmented" role="group" aria-label="Trier">
               <button className={`seg-item ${sort === 'recent' ? 'seg-item-active' : ''}`} onClick={() => setSort('recent')}>Récents</button>
-              <button className={`seg-item ${sort === 'az' ? 'seg-item-active' : ''}`} onClick={() => setSort('az')}>A–Z</button>
+              <button className={`seg-item ${sort === 'az' ? 'seg-item-active' : ''}`} onClick={() => setSort('az')}>A à Z</button>
             </div>
           )}
         </div>
@@ -129,7 +134,7 @@ const BarList: React.FC<BarListProps> = ({ establishments, loading, onSelect, on
             <p className="text-muted text-sm mb-6 max-w-sm mx-auto pretty">
               Créez votre premier bar en moins d'une minute : identité, visuels, localisation, codes d'accès.
             </p>
-            <button onClick={() => setWizard(true)} className="btn btn-primary btn-lg mx-auto">
+            <button onClick={openWizard} className="btn btn-primary btn-lg mx-auto">
               <i className="fa-solid fa-plus" aria-hidden="true"></i> Créer mon établissement
             </button>
           </div>

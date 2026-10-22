@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { UserRole, Establishment } from '../types';
-import { api } from '../api';
+import { api, ApiError } from '../api';
 import MapEmbed from '../components/MapEmbed';
 
 interface LoginProps {
   bar?: Establishment;
-  onLogin: (user: { name: string; role: UserRole; establishmentId: string }) => void;
+  onLogin: (user: { name: string; role: UserRole; establishmentId: string; token: string }) => void;
   onClientAccess: () => void;
+  /** Set when the signed-in owner account owns this bar: Direction access without code. */
+  onOwnerEnter?: () => Promise<void>;
 }
 
 const STAFF_ROLES: { role: UserRole; label: string; desc: string; icon: string }[] = [
@@ -15,12 +17,13 @@ const STAFF_ROLES: { role: UserRole; label: string; desc: string; icon: string }
   { role: UserRole.CAISSIER, label: 'Caisse', desc: 'Encaissement des paiements', icon: 'fa-cash-register' },
 ];
 
-const Login: React.FC<LoginProps> = ({ bar, onLogin, onClientAccess }) => {
+const Login: React.FC<LoginProps> = ({ bar, onLogin, onClientAccess, onOwnerEnter }) => {
+  const [ownerBusy, setOwnerBusy] = useState(false);
   const [view, setView] = useState<'CHOOSE' | 'STAFF'>('CHOOSE');
   const [role, setRole] = useState<UserRole>(UserRole.PATRON);
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ title?: string; message: string } | null>(null);
 
   if (!bar) {
     return (
@@ -38,12 +41,22 @@ const Login: React.FC<LoginProps> = ({ bar, onLogin, onClientAccess }) => {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!code.trim()) return setError('Entrez le code d\'accès.');
+    if (code.trim().length < 4) return setError({ message: 'Entrez votre code d’accès (4 à 8 chiffres).' });
     setIsLoading(true);
-    const ok = await api.verifyAccess(bar.id, role, code.trim());
+    let token: string | null = null;
+    try {
+      token = await api.staffLogin(bar.id, role, code.trim());
+    } catch (err) {
+      setIsLoading(false);
+      const f = ApiError.from(err, 'staffLogin');
+      return setError({ title: f.title, message: f.message });
+    }
     setIsLoading(false);
-    if (!ok) return setError('Code incorrect pour cet espace.');
-    onLogin({ name: roleInfo.label, role, establishmentId: bar.id });
+    if (!token) {
+      setCode('');
+      return setError({ title: 'Code incorrect', message: `Ce code n’ouvre pas l’espace ${roleInfo.label}. Vérifiez-le auprès de la direction.` });
+    }
+    onLogin({ name: roleInfo.label, role, establishmentId: bar.id, token });
   };
 
   return (
@@ -63,12 +76,31 @@ const Login: React.FC<LoginProps> = ({ bar, onLogin, onClientAccess }) => {
           {error && (
             <div className="mb-5 flex items-start gap-3 rounded-2xl bg-danger/12 text-danger px-4 py-3 text-sm font-medium animate-pop-in" role="alert">
               <i className="fa-solid fa-circle-exclamation mt-0.5" aria-hidden="true"></i>
-              <span>{error}</span>
+              <span>
+                {error.title && <span className="block font-semibold">{error.title}</span>}
+                <span className={error.title ? 'block font-normal opacity-90' : ''}>{error.message}</span>
+              </span>
             </div>
           )}
 
           {view === 'CHOOSE' ? (
             <div className="space-y-3">
+              {onOwnerEnter && (
+                <button
+                  onClick={async () => { setOwnerBusy(true); await onOwnerEnter(); setOwnerBusy(false); }}
+                  disabled={ownerBusy}
+                  className="w-full group rounded-2xl border border-accent/50 bg-accent/10 hover:bg-accent/15 p-4 flex items-center gap-4 text-left transition-all"
+                >
+                  <span className="w-12 h-12 rounded-xl bg-accent text-onAccent grid place-items-center text-lg shrink-0">
+                    <i className={`fa-solid ${ownerBusy ? 'fa-circle-notch fa-spin' : 'fa-crown'}`} aria-hidden="true"></i>
+                  </span>
+                  <span className="flex-grow">
+                    <span className="block font-semibold text-ink">Entrer en tant que propriétaire</span>
+                    <span className="block text-xs text-muted mt-0.5">Avec votre compte, sans code</span>
+                  </span>
+                  <i className="fa-solid fa-arrow-right text-accentStrong" aria-hidden="true"></i>
+                </button>
+              )}
               <button onClick={onClientAccess} className="w-full group rounded-2xl border border-line/12 bg-surface2 hover:border-accent/50 p-4 flex items-center gap-4 text-left transition-all">
                 <span className="w-12 h-12 rounded-xl bg-accent/14 text-accentStrong grid place-items-center text-lg shrink-0"><i className="fa-solid fa-utensils" aria-hidden="true"></i></span>
                 <span className="flex-grow">

@@ -1,8 +1,10 @@
 import { supabase } from './supabaseClient';
 import { Establishment, Order, Product, Notification, UserRole, OrderStatus, PaymentMethod } from './types';
+import { FriendlyError, ErrorTone, toFriendlyError } from './lib/errors';
 
 // ---------- mappers (DB row -> app type) ----------
-const mapProduct = (r: any): Product => ({
+/* eslint-disable @typescript-eslint/no-explicit-any -- raw PostgREST rows */
+export const mapProduct = (r: any): Product => ({
   id: r.id,
   name: r.name,
   description: r.description || '',
@@ -14,7 +16,7 @@ const mapProduct = (r: any): Product => ({
   imageUrl: r.image_url || '',
 });
 
-const mapOrder = (r: any): Order => ({
+export const mapOrder = (r: any): Order => ({
   id: r.id,
   tableNumber: r.table_number ?? 1,
   clientName: r.client_name || undefined,
@@ -55,6 +57,7 @@ const mapEstablishment = (r: any): Establishment => ({
   notifications: [],
   loaded: false,
 });
+/* eslint-enable @typescript-eslint/no-explicit-any */
 
 export interface NewEstablishmentInput {
   name: string;
@@ -69,6 +72,43 @@ export interface NewEstablishmentInput {
   codeCaissier: string;
 }
 
+export { SESSION_EXPIRED } from './lib/errors';
+
+/** Every failure leaves the API as an ApiError carrying a user-ready title and message. */
+export class ApiError extends Error implements FriendlyError {
+  readonly title: string;
+  readonly tone: ErrorTone;
+  readonly code?: string;
+  readonly hint?: string;
+  readonly retryable: boolean;
+
+  constructor(f: FriendlyError) {
+    super(f.message);
+    this.title = f.title;
+    this.tone = f.tone;
+    this.code = f.code;
+    this.hint = f.hint;
+    this.retryable = f.retryable;
+  }
+
+  static from(err: unknown, context: string): ApiError {
+    if (err instanceof ApiError) return err;
+    console.error(`[api] ${context}`, err);
+    return new ApiError(toFriendlyError(err));
+  }
+}
+
+const rpc = async <T>(fn: string, args: Record<string, unknown>): Promise<T> => {
+  let result;
+  try {
+    result = await supabase.rpc(fn, args);
+  } catch (e) {
+    throw ApiError.from(e, fn); // network failure: fetch itself rejected
+  }
+  if (result.error) throw ApiError.from(result.error, fn);
+  return result.data as T;
+};
+
 export const api = {
   // ---------- Establishments ----------
   async getEstablishments(): Promise<Establishment[]> {
@@ -76,7 +116,7 @@ export const api = {
       .from('establishments')
       .select('id,name,description,logo_url,cover_url,address,lat,lng,created_at')
       .order('created_at', { ascending: false });
-    if (error) { console.error(error); return []; }
+    if (error) throw ApiError.from(error, 'getEstablishments');
     return (data || []).map(mapEstablishment);
   },
 
@@ -84,24 +124,54 @@ export const api = {
   async getProductIndex(): Promise<{ establishmentId: string; name: string; category: string }[]> {
     const { data, error } = await supabase.from('products').select('establishment_id,name,category');
     if (error) return [];
-    return (data || []).map((r: any) => ({ establishmentId: r.establishment_id, name: r.name, category: r.category }));
+    return (data || []).map(r => ({ establishmentId: r.establishment_id, name: r.name, category: r.category }));
   },
 
-  async getBarData(establishmentId: string): Promise<{ products: Product[]; orders: Order[]; notifications: Notification[] }> {
-    const [p, o, n] = await Promise.all([
-      supabase.from('products').select('*').eq('establishment_id', establishmentId).order('created_at', { ascending: true }),
-      supabase.from('orders').select('*, order_items(*)').eq('establishment_id', establishmentId).order('created_at', { ascending: false }),
-      supabase.from('notifications').select('*').eq('establishment_id', establishmentId).eq('handled', false).order('created_at', { ascending: false }),
-    ]);
-    return {
-      products: (p.data || []).map(mapProduct),
-      orders: (o.data || []).map(mapOrder),
-      notifications: (n.data || []).map(mapNotif),
-    };
+  /** Public menu of one establishment. */
+  async getProducts(establishmentId: string): Promise<Product[]> {
+    const { data, error } = await supabase.from('products').select('*').eq('establishment_id', establishmentId).order('created_at', { ascending: true });
+    if (error) throw ApiError.from(error, 'getProducts');
+    return (data || []).map(mapProduct);
   },
 
-  async createEstablishment(input: NewEstablishmentInput): Promise<string | null> {
-    const { data, error } = await supabase.rpc('create_establishment', {
+  /** Staff only: orders + open notifications of the session's establishment. */
+  async getBarActivity(token: string): Promise<{ orders: Order[]; notifications: Notification[] }> {
+    const data = await rpc<{ orders: unknown[]; notifications: unknown[] }>('get_bar_activity', { p_token: token });
+    return { orders: (data?.orders || []).map(mapOrder), notifications: (data?.notifications || []).map(mapNotif) };
+  },
+
+  /** QR client: only the orders whose tracking tokens this device holds. */
+  async trackOrders(tokens: string[]): Promise<Order[]> {
+    if (tokens.length === 0) return [];
+    const data = await rpc<unknown[]>('track_orders', { p_tokens: tokens });
+    return (data || []).map(mapOrder);
+  },
+
+  // ---------- Accounts ----------
+  /** Signed-in customer: order history across establishments. */
+  async myOrders(): Promise<(Order & { establishmentName: string })[]> {
+    const data = await rpc<Record<string, unknown>[]>('my_orders', {});
+    return (data || []).map(r => ({ ...mapOrder(r), establishmentName: String(r.establishment_name || '') }));
+  },
+
+  /** Signed-in owner: establishments attached to the account. */
+  async myEstablishments(): Promise<Establishment[]> {
+    const data = await rpc<unknown[]>('my_establishments', {});
+    return (data || []).map(mapEstablishment);
+  },
+
+  /** Right to erasure: deletes the signed-in account (orders are kept, detached). */
+  async deleteMyAccount(): Promise<void> {
+    await rpc('delete_my_account', {});
+  },
+
+  /** Signed-in owner: opens a Direction session on one of their bars, no code needed. */
+  async ownerSession(establishmentId: string): Promise<string> {
+    return rpc<string>('owner_session', { p_establishment: establishmentId });
+  },
+
+  async createEstablishment(input: NewEstablishmentInput): Promise<string> {
+    return rpc<string>('create_establishment', {
       p_name: input.name,
       p_description: input.description,
       p_logo_url: input.logoUrl,
@@ -113,123 +183,97 @@ export const api = {
       p_code_serveur: input.codeServeur,
       p_code_caissier: input.codeCaissier,
     });
-    if (error) { console.error('createEstablishment', error); return null; }
-    return data as string;
   },
 
-  // ---------- Auth (3 separate codes) ----------
-  async verifyAccess(establishmentId: string, role: UserRole, code: string): Promise<boolean> {
-    const { data, error } = await supabase.rpc('verify_access', {
-      p_establishment: establishmentId,
-      p_role: role,
-      p_code: code,
+  // ---------- Staff session (3 separate codes) ----------
+  /** Returns a session token, or null when the code is wrong. */
+  async staffLogin(establishmentId: string, role: UserRole, code: string): Promise<string | null> {
+    return rpc<string | null>('staff_login', { p_establishment: establishmentId, p_role: role, p_code: code });
+  },
+
+  /** Server-side check used to restore a session after a reload.
+   *  null = session invalid or expired; throws when the server can't be reached. */
+  async staffSession(token: string): Promise<{ establishmentId: string; role: UserRole } | null> {
+    const data = await rpc<{ establishment_id: string; role: string }[]>('staff_session', { p_token: token });
+    const row = Array.isArray(data) ? data[0] : null;
+    return row ? { establishmentId: row.establishment_id, role: row.role as UserRole } : null;
+  },
+
+  async staffLogout(token: string): Promise<void> {
+    // Best effort: the session expires on its own anyway.
+    try { await supabase.rpc('staff_logout', { p_token: token }); } catch { /* offline */ }
+  },
+
+  // ---------- Products (Direction) ----------
+  async addProduct(token: string, product: Omit<Product, 'id'>): Promise<string> {
+    return rpc<string>('add_product', {
+      p_token: token,
+      p_name: product.name,
+      p_description: product.description,
+      p_category: product.category,
+      p_price: product.price,
+      p_stock: product.currentStock,
+      p_low_stock_threshold: product.lowStockThreshold ?? 10,
+      p_image_url: product.imageUrl,
     });
-    if (error) { console.error('verifyAccess', error); return false; }
-    return !!data;
   },
 
-  // ---------- Products ----------
-  async addProduct(establishmentId: string, product: Omit<Product, 'id'>): Promise<Product | null> {
-    const { data, error } = await supabase.from('products').insert({
-      establishment_id: establishmentId,
-      name: product.name,
-      description: product.description,
-      category: product.category,
-      price: product.price,
-      initial_stock: product.initialStock,
-      current_stock: product.currentStock,
-      low_stock_threshold: product.lowStockThreshold ?? 10,
-      image_url: product.imageUrl,
-    }).select().single();
-    if (error) { console.error('addProduct', error); return null; }
-    return mapProduct(data);
+  async deleteProduct(token: string, productId: string): Promise<void> {
+    await rpc('delete_product', { p_token: token, p_product: productId });
   },
 
-  async updateProduct(product: Product): Promise<boolean> {
-    const { error } = await supabase.from('products').update({
-      name: product.name,
-      description: product.description,
-      category: product.category,
-      price: product.price,
-      current_stock: product.currentStock,
-      initial_stock: product.initialStock,
-      low_stock_threshold: product.lowStockThreshold ?? 10,
-      image_url: product.imageUrl,
-    }).eq('id', product.id);
-    return !error;
-  },
-
-  async deleteProduct(productId: string): Promise<boolean> {
-    const { error } = await supabase.from('products').delete().eq('id', productId);
-    return !error;
-  },
-
-  async addStock(productId: string, qty: number): Promise<boolean> {
-    const { data, error } = await supabase.from('products').select('current_stock, initial_stock').eq('id', productId).single();
-    if (error || !data) return false;
-    const { error: upErr } = await supabase.from('products').update({
-      current_stock: (data.current_stock ?? 0) + qty,
-      initial_stock: (data.initial_stock ?? 0) + qty,
-    }).eq('id', productId);
-    return !upErr;
+  /** Atomic restock, returns the new current stock. */
+  async addStock(token: string, productId: string, qty: number): Promise<number> {
+    return rpc<number>('add_stock', { p_token: token, p_product: productId, p_qty: qty });
   },
 
   // ---------- Orders ----------
+  /** The total is computed server-side from product prices; `token` is set for staff-entered orders.
+   *  Returns the order's secret tracking token (the only way a QR client can read it back). */
   async placeOrder(
     establishmentId: string,
-    order: { tableNumber: number; clientName?: string; paymentMethod?: PaymentMethod; serverName: string; total: number },
-    items: { productId: string; quantity: number; priceAtTime: number }[]
-  ): Promise<string | null> {
-    const { data, error } = await supabase.from('orders').insert({
-      establishment_id: establishmentId,
-      table_number: order.tableNumber,
-      client_name: order.clientName || null,
-      status: 'EN_ATTENTE',
-      payment_method: order.paymentMethod || null,
-      server_name: order.serverName,
-      total: order.total,
-    }).select().single();
-    if (error || !data) { console.error('placeOrder', error); return null; }
-
-    const rows = items.map(i => ({ order_id: data.id, product_id: i.productId, quantity: i.quantity, price_at_time: i.priceAtTime }));
-    if (rows.length) await supabase.from('order_items').insert(rows);
-    return data.id as string;
-  },
-
-  async addNotification(establishmentId: string, notif: { type: 'ORDER' | 'CALL_SERVER'; message: string; tableNumber?: number; orderId?: string }): Promise<boolean> {
-    const { error } = await supabase.from('notifications').insert({
-      establishment_id: establishmentId,
-      type: notif.type,
-      message: notif.message,
-      table_number: notif.tableNumber ?? null,
-      order_id: notif.orderId ?? null,
+    order: { tableNumber: number; clientName?: string; paymentMethod?: PaymentMethod; token?: string },
+    items: { productId: string; quantity: number }[]
+  ): Promise<string> {
+    return rpc<string>('place_order', {
+      p_establishment: establishmentId,
+      p_table: order.tableNumber,
+      p_client_name: order.clientName || null,
+      p_payment_method: order.paymentMethod || null,
+      p_items: items.map(i => ({ product_id: i.productId, quantity: i.quantity })),
+      p_token: order.token || null,
     });
-    return !error;
   },
 
-  async updateOrderStatus(orderId: string, status: OrderStatus): Promise<boolean> {
-    const { error } = await supabase.from('orders').update({ status }).eq('id', orderId);
-    return !error;
+  /** Returns false when the table already called less than a minute ago. */
+  async callServer(establishmentId: string, tableNumber: number): Promise<boolean> {
+    return rpc<boolean>('call_server', { p_establishment: establishmentId, p_table: tableNumber });
   },
 
-  async payOrder(orderId: string): Promise<boolean> {
-    const { error } = await supabase.rpc('pay_order', { p_order: orderId });
-    if (error) console.error('payOrder', error);
-    return !error;
+  async updateOrderStatus(token: string, orderId: string, status: OrderStatus.SERVED | OrderStatus.CANCELLED): Promise<void> {
+    await rpc('set_order_status', { p_token: token, p_order: orderId, p_status: status });
   },
 
-  async clearNotification(id: string): Promise<boolean> {
-    const { error } = await supabase.from('notifications').update({ handled: true }).eq('id', id);
-    return !error;
+  /** Marks the order PAYÉ and deducts stock atomically. Refused if already paid. */
+  async payOrder(token: string, orderId: string): Promise<void> {
+    await rpc('pay_order', { p_token: token, p_order: orderId });
+  },
+
+  async clearNotification(token: string, id: string): Promise<void> {
+    await rpc('clear_notification', { p_token: token, p_id: id });
   },
 
   // ---------- Realtime ----------
-  subscribeToBar(establishmentId: string, onChange: () => void) {
-    const channel = supabase.channel(`bar_${establishmentId}_${Math.random().toString(36).slice(2, 7)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders', filter: `establishment_id=eq.${establishmentId}` }, onChange)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `establishment_id=eq.${establishmentId}` }, onChange)
+  /**
+   * Orders and notifications are private, so the database only broadcasts content-free
+   * "change" signals (topics `bar:<id>` and `order:<tracking token>`); the app then
+   * re-reads through the authorized RPCs. Products are public and use postgres_changes.
+   */
+  subscribe(establishmentId: string, topics: string[], onChange: () => void) {
+    const menu = supabase.channel(`menu_${establishmentId}_${Math.random().toString(36).slice(2, 7)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'products', filter: `establishment_id=eq.${establishmentId}` }, onChange)
       .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    const signals = topics.map(topic => supabase.channel(topic).on('broadcast', { event: 'change' }, onChange).subscribe());
+    return () => { [menu, ...signals].forEach(c => { supabase.removeChannel(c); }); };
   },
 };

@@ -8,9 +8,11 @@ const KEY = 'theme';
 export const systemTheme = (): ResolvedTheme =>
   window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
 
+/** Light by default: "system" only applies when the user explicitly picks it in Settings. */
 export const getStoredMode = (): ThemeMode => {
-  const v = localStorage.getItem(KEY);
-  return v === 'light' || v === 'dark' ? v : 'system';
+  let v: string | null = null;
+  try { v = localStorage.getItem(KEY); } catch { /* storage unavailable */ }
+  return v === 'light' || v === 'dark' || v === 'system' ? v : 'light';
 };
 
 export const resolveTheme = (mode: ThemeMode): ResolvedTheme =>
@@ -24,8 +26,7 @@ export const applyTheme = (resolved: ResolvedTheme) => {
 };
 
 export const setThemeMode = (mode: ThemeMode) => {
-  if (mode === 'system') localStorage.removeItem(KEY);
-  else localStorage.setItem(KEY, mode);
+  try { localStorage.setItem(KEY, mode); } catch { /* storage unavailable */ }
   applyTheme(resolveTheme(mode));
   window.dispatchEvent(new CustomEvent('barsafe:themechange'));
 };

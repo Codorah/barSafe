@@ -1,12 +1,15 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Product, PaymentMethod, Order, OrderStatus } from '../types';
+import { cartCount, cartItems, cartTotal } from '../lib/order';
 
 interface ClientMenuProps {
   products: Product[];
+  /** Only this device's orders (read back with their tracking tokens). */
   orders: Order[];
-  establishmentId: string;
+  /** Prefilled when the client is signed in to an account. */
+  defaultName?: string;
   onPlaceOrder: (items: { productId: string; quantity: number }[], table: number, method: PaymentMethod, clientName: string) => Promise<string | null> | void;
-  onCallServer: (table: number) => void;
+  onCallServer: (table: number) => Promise<boolean> | void;
 }
 
 const PAYMENTS: { value: PaymentMethod; label: string; icon: string }[] = [
@@ -21,24 +24,18 @@ const STATUS_STEPS = [
   { key: OrderStatus.PAID, label: 'Payée', icon: 'fa-circle-check' },
 ];
 
-const ClientMenu: React.FC<ClientMenuProps> = ({ products, orders, establishmentId, onPlaceOrder, onCallServer }) => {
+const ClientMenu: React.FC<ClientMenuProps> = ({ products, orders, defaultName = '', onPlaceOrder, onCallServer }) => {
   const [cart, setCart] = useState<{ [id: string]: number }>({});
   const [table, setTable] = useState(1);
   const [showCheckout, setShowCheckout] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('ESPECES');
-  const [clientName, setClientName] = useState('');
+  const [clientName, setClientName] = useState(defaultName);
   const [serverCalled, setServerCalled] = useState(false);
   const [query, setQuery] = useState('');
   const [category, setCategory] = useState<string>('Tous');
   const [view, setView] = useState<'MENU' | 'ORDERS'>('MENU');
 
-  const storeKey = `barsafe_myorders_${establishmentId}`;
-  const [myIds, setMyIds] = useState<string[]>(() => {
-    try { return JSON.parse(localStorage.getItem(storeKey) || '[]'); } catch { return []; }
-  });
-  useEffect(() => { try { localStorage.setItem(storeKey, JSON.stringify(myIds)); } catch { /* ignore */ } }, [myIds, storeKey]);
-
-  const myOrders = useMemo(() => orders.filter(o => myIds.includes(o.id)), [orders, myIds]);
+  const myOrders = orders;
 
   const categories = useMemo(() => ['Tous', ...Array.from(new Set(products.map(p => p.category)))], [products]);
   const filtered = useMemo(() => {
@@ -58,21 +55,23 @@ const ClientMenu: React.FC<ClientMenuProps> = ({ products, orders, establishment
     return next;
   });
 
-  const totalItems = (Object.values(cart) as number[]).reduce((a, b) => a + b, 0);
-  const totalPrice = (Object.entries(cart) as [string, number][]).reduce((acc, [id, qty]) => acc + (products.find(p => p.id === id)?.price || 0) * qty, 0);
+  const totalItems = cartCount(cart);
+  const totalPrice = cartTotal(cart, products);
 
   const handleSendOrder = async () => {
     if (!clientName.trim()) return;
-    const items = (Object.entries(cart) as [string, number][]).map(([productId, quantity]) => ({ productId, quantity }));
-    const id = await onPlaceOrder(items, table, paymentMethod, clientName.trim());
+    const items = cartItems(cart);
+    const tracking = await onPlaceOrder(items, table, paymentMethod, clientName.trim());
+    if (!tracking) return; // error already shown, keep the cart so the client can retry
     setCart({});
     setShowCheckout(false);
-    if (id) { setMyIds(prev => [id, ...prev]); setView('ORDERS'); }
+    setView('ORDERS');
   };
 
-  const handleCallServer = () => {
-    onCallServer(table);
+  const handleCallServer = async () => {
     setServerCalled(true);
+    const sent = await onCallServer(table);
+    if (sent === false) { setServerCalled(false); return; }
     setTimeout(() => setServerCalled(false), 5000);
   };
 
@@ -209,7 +208,7 @@ const ClientMenu: React.FC<ClientMenuProps> = ({ products, orders, establishment
                           <button onClick={() => addToCart(product.id)} disabled={out} className="btn btn-soft btn-sm"><i className="fa-solid fa-plus" aria-hidden="true"></i> Ajouter</button>
                         ) : (
                           <div className="flex items-center gap-2 bg-surface2 rounded-full p-1 border border-line/10">
-                            <button onClick={() => removeFromCart(product.id)} className="w-8 h-8 rounded-full bg-surface grid place-items-center text-ink" aria-label="Retirer">–</button>
+                            <button onClick={() => removeFromCart(product.id)} className="w-8 h-8 rounded-full bg-surface grid place-items-center text-ink" aria-label="Retirer"><i className="fa-solid fa-minus text-xs" aria-hidden="true"></i></button>
                             <span className="font-semibold w-5 text-center tabnum">{qty}</span>
                             <button onClick={() => addToCart(product.id)} className="w-8 h-8 rounded-full bg-accent text-onAccent grid place-items-center" aria-label="Ajouter">+</button>
                           </div>
