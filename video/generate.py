@@ -474,6 +474,30 @@ SFX = [
     whoosh('sfx-whoosh-end', t('end', 0.25), 0.5),
 ]
 
+# Voiceover: Edge TTS, voice fr-FR-VivienneMultilingualNeural (+4 %), one line per scene (assets/voice/script.txt).
+# Each line starts just after its scene title appears and ends before the scene does.
+VOICE_DELAY = {'hook': 0.15}
+import subprocess
+
+def media_len(path):
+    out = subprocess.run(['ffprobe', '-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', os.path.join(OUT, path)],
+                         capture_output=True, text=True, check=True)
+    return float(out.stdout.strip())
+
+VOICE = []
+for cid, s0, dur in hosts:
+    src = f'assets/voice/{cid}.mp3'
+    st = round(s0 + VOICE_DELAY.get(cid, 0.3), 3)
+    length = round(media_len(src), 3)
+    if st + length > s0 + dur:
+        raise SystemExit(f'voice line for {cid} ({length}s) overruns its scene')
+    VOICE.append((f'voice-{cid}', src, st, length))
+# Effects sit under the voice
+SFX = [(i, src, st, d, round(v * 0.7, 2), ms, fo) for (i, src, st, d, v, ms, fo) in SFX]
+
+voice_html = '\n'.join(
+    f'      <audio id="{i}" class="clip" src="{src}" data-start="{st}" data-duration="{ln}" data-volume="1" data-track-index="4"></audio>'
+    for i, src, st, ln in VOICE)
 host_html = '\n'.join(
     f'      <div id="{cid}" class="clip" data-composition-id="{cid}" data-composition-src="compositions/{cid}.html" '
     f'data-start="{s}" data-duration="{d}" data-track-index="1" data-track-kind="graphics" data-width="1080" data-height="1920"></div>'
@@ -501,6 +525,7 @@ root = f"""<!doctype html>
     <!-- BarSafe · guide client (9:16, 54 s). One scene per file in compositions/. -->
     <div id="root" data-composition-id="main" data-start="0" data-duration="{TOTAL}" data-width="1080" data-height="1920">
 {host_html}
+{voice_html}
 {audio_html}
     </div>
     <script>

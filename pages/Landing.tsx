@@ -134,11 +134,12 @@ const HeroVideo: React.FC = () => {
       )}
       <button
         onClick={toggleSound}
-        className="absolute bottom-4 right-4 w-11 h-11 rounded-full bg-black/55 text-white grid place-items-center backdrop-blur-sm hover:bg-black/70 transition-colors"
-        aria-label={muted ? 'Activer le son' : 'Couper le son'}
+        className={`absolute bottom-4 right-4 h-11 rounded-full text-white flex items-center justify-center gap-2 backdrop-blur-sm transition-colors ${muted ? 'px-4 bg-accent !text-onAccent font-semibold text-sm shadow-lift' : 'w-11 bg-black/55 hover:bg-black/70'}`}
+        aria-label={muted ? 'Écouter la voix off' : 'Couper le son'}
         aria-pressed={!muted}
       >
-        <i className={`fa-solid ${muted ? 'fa-volume-xmark' : 'fa-volume-high'}`} aria-hidden="true"></i>
+        <i className={`fa-solid ${muted ? 'fa-volume-high' : 'fa-volume-xmark'}`} aria-hidden="true"></i>
+        {muted && <span>Écouter</span>}
       </button>
     </>
   );

@@ -1,0 +1,9 @@
+hook|Au bar, commandez sans attendre, avec BarSafe.
+scan|Scannez le QR code posé sur votre table.
+menu|Le menu s'ouvre aussitôt, avec votre numéro de table déjà indiqué.
+cart|Ajoutez vos boissons et vos plats. Le total se calcule tout seul.
+checkout|Indiquez votre prénom, choisissez le paiement, puis validez.
+track|Le serveur est prévenu, et vous suivez votre commande en direct.
+call|Besoin d'aide ? Un bouton appelle un serveur.
+pay|Réglez à la caisse : espèces, carte ou Mobile Money.
+end|BarSafe. Sans compte, sans application. Commandez sans attendre.
